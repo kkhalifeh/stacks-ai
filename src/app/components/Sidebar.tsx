@@ -3,7 +3,7 @@ import {
   FileText, Download, Home, Mail, Users, Building2, BookOpen, CalendarDays,
   UserCheck, GraduationCap, FolderOpen, BrainCircuit, ChevronDown, ChevronRight,
   ChevronLeft, Lock, Unlock, DollarSign, Info, Paperclip, Pencil,
-  Sparkles, Terminal as TerminalIcon,
+  Terminal as TerminalIcon,
 } from 'lucide-react';
 import type { LoadedStack, LoadedBinder } from '../stacks';
 import { openTerminal, renameBinder, renameDocument } from '../api';
@@ -17,7 +17,6 @@ interface SidebarProps {
   activePdf: string | null;
   onPdfPreview: (url: string | null) => void;
   onBack: () => void;
-  onOpenBrand: () => void;
 }
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
@@ -333,7 +332,7 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
   );
 }
 
-export function Sidebar({ stack, activeDocumentId, onDocumentChange, onExport, activePdf, onPdfPreview, onBack, onOpenBrand }: SidebarProps) {
+export function Sidebar({ stack, activeDocumentId, onDocumentChange, onExport, activePdf, onPdfPreview, onBack }: SidebarProps) {
   return (
     <aside
       className="lx-scroll fixed left-0 top-0 h-screen w-72 px-4 py-5 overflow-y-auto flex flex-col print:hidden"
@@ -398,27 +397,6 @@ export function Sidebar({ stack, activeDocumentId, onDocumentChange, onExport, a
       >
         <TerminalIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
         Open Claude in Terminal
-      </button>
-
-      <button
-        onClick={onOpenBrand}
-        className="lx-focus mb-4 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-medium transition-colors"
-        style={{
-          background: 'var(--lx-surface-2)',
-          border: '1px solid var(--lx-border)',
-          color: 'var(--lx-text)',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = 'var(--lx-surface-hover)';
-          e.currentTarget.style.borderColor = 'var(--lx-border-strong)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--lx-surface-2)';
-          e.currentTarget.style.borderColor = 'var(--lx-border)';
-        }}
-      >
-        <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} style={{ color: 'var(--lx-accent)' }} />
-        Brand Studio
       </button>
 
       <div className="h-px mb-3" style={{ background: 'var(--lx-divider)' }} />

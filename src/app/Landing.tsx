@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
-import { stacks } from './stacks';
+import { Plus, Sparkles } from 'lucide-react';
+import { stacks, tenant } from './stacks';
 import { StackCard } from './components/StackCard';
 import { NewStackModal } from './components/NewStackModal';
 
 interface LandingProps {
   onOpen: (stackId: string) => void;
+  onOpenBrand: () => void;
 }
 
 function scopeThemeCss(css: string | undefined, scope: string): string {
@@ -13,7 +14,7 @@ function scopeThemeCss(css: string | undefined, scope: string): string {
   return css.replace(/:root\b/g, `.${scope}`);
 }
 
-export function Landing({ onOpen }: LandingProps) {
+export function Landing({ onOpen, onOpenBrand }: LandingProps) {
   const [showModal, setShowModal] = useState(false);
 
   const scopedThemes = useMemo(
@@ -34,33 +35,65 @@ export function Landing({ onOpen }: LandingProps) {
 
       <header className="max-w-[1280px] mx-auto px-10 pt-14 pb-10">
         <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1
-              className="text-[22px] font-semibold tracking-tight"
-              style={{ color: 'var(--lx-text)' }}
-            >
-              Document Builder
-            </h1>
-            <p
-              className="text-[13px] mt-1"
-              style={{ color: 'var(--lx-text-muted)' }}
-            >
-              {stacks.length} stack{stacks.length === 1 ? '' : 's'}
-            </p>
+          <div className="flex items-center gap-4">
+            {tenant?.logoUrl && (
+              <img
+                src={tenant.logoUrl}
+                alt=""
+                className="w-10 h-10 object-contain"
+                style={{ borderRadius: 'var(--lx-radius-sm)' }}
+              />
+            )}
+            <div>
+              <h1
+                className="text-[22px] font-semibold tracking-tight"
+                style={{ color: 'var(--lx-text)' }}
+              >
+                {tenant?.name ?? 'Document Builder'}
+              </h1>
+              <p
+                className="text-[13px] mt-1"
+                style={{ color: 'var(--lx-text-muted)' }}
+              >
+                {stacks.length} stack{stacks.length === 1 ? '' : 's'}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="lx-focus flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[10px] transition-colors"
-            style={{
-              background: 'var(--lx-accent)',
-              color: 'white',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-accent-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'var(--lx-accent)')}
-          >
-            <Plus className="w-4 h-4" strokeWidth={2.25} />
-            New stack
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenBrand}
+              className="lx-focus flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[10px] transition-colors"
+              style={{
+                background: 'var(--lx-surface-2)',
+                border: '1px solid var(--lx-border)',
+                color: 'var(--lx-text)',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                e.currentTarget.style.borderColor = 'var(--lx-border-strong)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--lx-surface-2)';
+                e.currentTarget.style.borderColor = 'var(--lx-border)';
+              }}
+            >
+              <Sparkles className="w-4 h-4" strokeWidth={1.75} style={{ color: 'var(--lx-accent)' }} />
+              Brand Studio
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="lx-focus flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[10px] transition-colors"
+              style={{
+                background: 'var(--lx-accent)',
+                color: 'white',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-accent-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'var(--lx-accent)')}
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.25} />
+              New stack
+            </button>
+          </div>
         </div>
       </header>
 

@@ -3,7 +3,6 @@
   "name": "Kinz internal deck",
   "subtitle": "16:9 slide deck",
   "format": "slide-16x9",
-  "theme": "theme/theme.css",
   "binders": [
     {
       "id": "deck",
@@ -12,7 +11,13 @@
       "color": "var(--color-primary)",
       "passwordProtected": false,
       "documents": [
-        { "id": "title-slide", "label": "Title Slide", "components": ["TitleSlide"] }
+        {
+          "id": "title-slide",
+          "label": "Title Slide",
+          "components": [
+            "TitleSlide"
+          ]
+        }
       ]
     }
   ]

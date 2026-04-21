@@ -3,7 +3,6 @@
   "name": "Kinz Offer Builder",
   "subtitle": "A4 document stack",
   "format": "a4",
-  "theme": "theme/theme.css",
   "binders": [
     {
       "id": "main",
@@ -12,7 +11,13 @@
       "color": "var(--color-primary)",
       "passwordProtected": false,
       "documents": [
-        { "id": "title", "label": "Title", "components": ["TitlePage"] }
+        {
+          "id": "title",
+          "label": "Title",
+          "components": [
+            "TitlePage"
+          ]
+        }
       ]
     }
   ]

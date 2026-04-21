@@ -20,6 +20,13 @@ export interface ThemeProposal {
   shadows: { resting: string; elevated: string };
 }
 
+export interface TenantBrand {
+  name: string;
+  subtitle: string;
+  logo: string | null;
+  hasTheme: boolean;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -28,8 +35,22 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-export async function uploadLogo(stackId: string, file: File): Promise<{ name: string; size: number }> {
-  const res = await fetch(`/__api/stacks/${encodeURIComponent(stackId)}/brand/logo`, {
+export async function getTenant(): Promise<TenantBrand> {
+  const res = await fetch('/__api/brand');
+  return handle(res);
+}
+
+export async function updateTenant(patch: { name?: string; subtitle?: string }): Promise<TenantBrand> {
+  const res = await fetch('/__api/brand', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handle(res);
+}
+
+export async function uploadTenantLogo(file: File): Promise<{ name: string; size: number }> {
+  const res = await fetch('/__api/brand/logo', {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'image/png' },
     body: file,
@@ -37,11 +58,12 @@ export async function uploadLogo(stackId: string, file: File): Promise<{ name: s
   return handle(res);
 }
 
-export async function generateTheme(
-  stackId: string,
-  input: { name: string; keywords?: string; feedback?: string },
-): Promise<{ proposal: ThemeProposal; model: string }> {
-  const res = await fetch(`/__api/stacks/${encodeURIComponent(stackId)}/brand/generate`, {
+export async function generateTenantTheme(input: {
+  name: string;
+  keywords?: string;
+  feedback?: string;
+}): Promise<{ proposal: ThemeProposal; model: string }> {
+  const res = await fetch('/__api/brand/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -49,8 +71,8 @@ export async function generateTheme(
   return handle(res);
 }
 
-export async function applyTheme(stackId: string, proposal: ThemeProposal): Promise<{ applied: true; logo: string | null }> {
-  const res = await fetch(`/__api/stacks/${encodeURIComponent(stackId)}/brand/apply`, {
+export async function applyTenantTheme(proposal: ThemeProposal): Promise<{ applied: true }> {
+  const res = await fetch('/__api/brand/apply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ proposal }),
@@ -58,9 +80,9 @@ export async function applyTheme(stackId: string, proposal: ThemeProposal): Prom
   return handle(res);
 }
 
-export function logoUrlFor(stackId: string, cacheBust?: number): string {
+export function tenantLogoUrl(cacheBust?: number): string {
   const q = cacheBust ? `?t=${cacheBust}` : '';
-  return `/__api/stacks/${encodeURIComponent(stackId)}/brand/logo${q}`;
+  return `/__api/brand/logo${q}`;
 }
 
 export function proposalToCssVars(p: ThemeProposal): string {

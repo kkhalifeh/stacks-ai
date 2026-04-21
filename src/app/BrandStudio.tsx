@@ -1,58 +1,82 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
-import { applyTheme, generateTheme, logoUrlFor, proposalToCssVars, uploadLogo, type ThemeProposal } from './brand-api';
-import { applyStackTheme, getStack } from './stacks';
+import {
+  applyTenantTheme,
+  generateTenantTheme,
+  getTenant,
+  proposalToCssVars,
+  tenantLogoUrl,
+  updateTenant,
+  uploadTenantLogo,
+  type TenantBrand,
+  type ThemeProposal,
+} from './brand-api';
+import { applyStackTheme, tenant as initialTenant } from './stacks';
 import { A4TitleSample } from './preview/A4TitleSample';
 import { A4ContentSample } from './preview/A4ContentSample';
 import { SlideTitleSample } from './preview/SlideTitleSample';
 import { SlideContentSample } from './preview/SlideContentSample';
 
 interface BrandStudioProps {
-  stackId: string;
   onBack: () => void;
 }
 
 const PREVIEW_SCALE_A4 = 0.5;
 const PREVIEW_SCALE_SLIDE = 0.45;
+const PREVIEW_SCOPE = 'brand-preview-tenant';
 
-export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
-  const stack = getStack(stackId);
-  const [name, setName] = useState(stack?.name ?? '');
+export function BrandStudio({ onBack }: BrandStudioProps) {
+  const [tenantData, setTenantData] = useState<TenantBrand | null>(null);
+  const [name, setName] = useState(initialTenant?.name ?? '');
   const [keywords, setKeywords] = useState('');
   const [feedback, setFeedback] = useState('');
   const [logoVersion, setLogoVersion] = useState(0);
-  const [hasLogo, setHasLogo] = useState(Boolean(stack?.logoUrl));
+  const [hasLogo, setHasLogo] = useState(Boolean(initialTenant?.logoUrl));
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
   const [generating, setGenerating] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewTab, setPreviewTab] = useState<'a4-title' | 'a4-content' | 'slide-title' | 'slide-content'>(
-    stack?.format === 'slide-16x9' ? 'slide-title' : 'a4-title',
-  );
+  const [previewTab, setPreviewTab] = useState<'a4-title' | 'a4-content' | 'slide-title' | 'slide-content'>('a4-title');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Clear any active stack theme while in Brand Studio so the proposal's preview isn't polluted
+  // Clear any active stack theme while in Brand Studio so preview isn't polluted
+  useEffect(() => { applyStackTheme(undefined); }, []);
+
+  // Initial load: pull tenant metadata from server
   useEffect(() => {
-    applyStackTheme(undefined);
+    (async () => {
+      try {
+        const t = await getTenant();
+        setTenantData(t);
+        setName(t.name);
+        setHasLogo(Boolean(t.logo));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load tenant brand');
+      }
+    })();
   }, []);
 
   const handleUpload = useCallback(async (file: File) => {
     setError(null);
     try {
-      await uploadLogo(stackId, file);
+      await uploadTenantLogo(file);
       setHasLogo(true);
       setLogoVersion(v => v + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
-  }, [stackId]);
+  }, []);
 
   async function handleGenerate() {
     setError(null);
     setGenerating(true);
     try {
-      const { proposal } = await generateTheme(stackId, {
-        name: name.trim() || stack?.name || stackId,
+      // Persist name first if changed
+      if (tenantData && name !== tenantData.name) {
+        await updateTenant({ name: name.trim() });
+      }
+      const { proposal } = await generateTenantTheme({
+        name: name.trim() || 'Brand',
         keywords: keywords.trim() || undefined,
         feedback: feedback.trim() || undefined,
       });
@@ -69,24 +93,16 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
     if (!proposal) return;
     setApplying(true);
     try {
-      await applyTheme(stackId, proposal);
-      // Reload the whole app so stacks.ts re-reads the new theme + updated stack.json
-      window.location.href = `/?stack=${encodeURIComponent(stackId)}`;
+      await applyTenantTheme(proposal);
+      // Full reload to re-read brand/theme.css via the Vite glob
+      window.location.href = `/`;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Apply failed');
       setApplying(false);
     }
   }
 
-  if (!stack) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm" style={{ color: 'var(--lx-text-muted)' }}>
-        Stack not found.
-      </div>
-    );
-  }
-
-  const logoUrlForPreview = hasLogo ? logoUrlFor(stackId, logoVersion) : undefined;
+  const logoUrlForPreview = hasLogo ? tenantLogoUrl(logoVersion) : initialTenant?.logoUrl;
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--lx-bg)', color: 'var(--lx-text)' }}>
@@ -104,16 +120,16 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
             onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
           >
             <ChevronLeft className="w-3 h-3" />
-            Back to {stack.name}
+            All stacks
           </button>
           <h1 className="text-[17px] font-semibold tracking-tight">Brand Studio</h1>
           <p className="text-[12px] mt-1" style={{ color: 'var(--lx-text-muted)' }}>
-            Upload a logo, describe the brand, let Claude propose a theme.
+            Tenant-wide brand. Applies to every stack unless a stack overrides it.
           </p>
         </div>
 
         <div className="px-6 pb-6 flex flex-col gap-5">
-          {/* Logo upload */}
+          {/* Logo */}
           <div>
             <label className="block text-[11px] font-medium mb-2" style={{ color: 'var(--lx-text-muted)' }}>
               Logo
@@ -143,14 +159,14 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
               {hasLogo ? (
                 <>
                   <img
-                    src={logoUrlFor(stackId, logoVersion)}
+                    src={tenantLogoUrl(logoVersion)}
                     alt=""
                     className="w-10 h-10 object-contain flex-shrink-0"
                     style={{ background: 'white', padding: 4, borderRadius: 'var(--lx-radius-sm)' }}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-medium truncate" style={{ color: 'var(--lx-text)' }}>
-                      Logo uploaded
+                      Logo set
                     </div>
                     <div className="text-[10px]" style={{ color: 'var(--lx-text-subtle)' }}>
                       Click to replace
@@ -166,7 +182,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
             </button>
           </div>
 
-          {/* Brand name */}
+          {/* Name */}
           <label className="block">
             <span className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--lx-text-muted)' }}>
               Brand name
@@ -174,7 +190,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
             <input
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder={stack.name}
+              placeholder="Kinz"
               className="lx-focus w-full text-[13px] px-3 py-2 transition-colors"
               style={{
                 background: 'var(--lx-surface)',
@@ -194,7 +210,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
             <textarea
               value={keywords}
               onChange={e => setKeywords(e.target.value)}
-              placeholder="e.g. minimal, confident, enterprise, technical"
+              placeholder="e.g. confident, technical, enterprise"
               rows={2}
               className="lx-focus w-full text-[13px] px-3 py-2 transition-colors resize-none"
               style={{
@@ -215,7 +231,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
               <textarea
                 value={feedback}
                 onChange={e => setFeedback(e.target.value)}
-                placeholder="e.g. make it more conservative, darken the primary, use warmer accents"
+                placeholder="e.g. darker primary, warmer accents, more neutral"
                 rows={2}
                 className="lx-focus w-full text-[13px] px-3 py-2 transition-colors resize-none"
                 style={{
@@ -246,7 +262,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
 
           {!hasLogo && (
             <p className="text-[11px]" style={{ color: 'var(--lx-text-subtle)' }}>
-              Upload a logo first to enable generation.
+              Upload a logo to enable generation. Existing palette still shows in preview.
             </p>
           )}
 
@@ -291,7 +307,7 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
                   opacity: applying ? 0.5 : 1,
                 }}
               >
-                {applying ? 'Applying…' : 'Apply to stack'}
+                {applying ? 'Applying…' : 'Apply to all stacks'}
               </button>
             </>
           )}
@@ -314,21 +330,22 @@ export function BrandStudio({ stackId, onBack }: BrandStudioProps) {
             <TabBtn label="Slide Title" active={previewTab === 'slide-title'} onClick={() => setPreviewTab('slide-title')} />
             <TabBtn label="Slide Content" active={previewTab === 'slide-content'} onClick={() => setPreviewTab('slide-content')} />
           </div>
+
+          <span className="ml-auto text-[11px]" style={{ color: 'var(--lx-text-faint)' }}>
+            {proposal ? 'Showing proposal' : tenantData?.hasTheme ? 'Showing current tenant brand' : 'No brand set yet'}
+          </span>
         </div>
 
         <div className="flex-1 overflow-auto flex items-center justify-center p-10" style={{ background: 'var(--lx-bg)' }}>
-          <div className={`brand-preview-scope brand-preview-${stackId}`}>
+          <div className={PREVIEW_SCOPE}>
             {proposal && (
-              <style>{`.brand-preview-${stackId} { ${proposalToCssVars(proposal)} }`}</style>
+              <style>{`.${PREVIEW_SCOPE} { ${proposalToCssVars(proposal)} }`}</style>
             )}
             <PreviewCanvas
               tab={previewTab}
-              brandName={name.trim() || stack.name}
+              brandName={name.trim() || tenantData?.name || 'Brand'}
               logoUrl={logoUrlForPreview}
-              scale={
-                previewTab === 'a4-title' || previewTab === 'a4-content' ? PREVIEW_SCALE_A4 : PREVIEW_SCALE_SLIDE
-              }
-              hasProposal={Boolean(proposal)}
+              scale={previewTab.startsWith('a4') ? PREVIEW_SCALE_A4 : PREVIEW_SCALE_SLIDE}
             />
           </div>
         </div>
@@ -358,19 +375,13 @@ function PreviewCanvas({
   brandName,
   logoUrl,
   scale,
-  hasProposal,
 }: {
   tab: 'a4-title' | 'a4-content' | 'slide-title' | 'slide-content';
   brandName: string;
   logoUrl?: string;
   scale: number;
-  hasProposal: boolean;
 }) {
-  const pickDims = () => {
-    if (tab.startsWith('a4')) return { w: 794, h: 1123 };
-    return { w: 1280, h: 720 };
-  };
-  const { w, h } = pickDims();
+  const { w, h } = tab.startsWith('a4') ? { w: 794, h: 1123 } : { w: 1280, h: 720 };
   const Sample =
     tab === 'a4-title' ? A4TitleSample
       : tab === 'a4-content' ? A4ContentSample
@@ -390,26 +401,6 @@ function PreviewCanvas({
       >
         <Sample brandName={brandName} logoUrl={logoUrl} />
       </div>
-      {!hasProposal && (
-        <div
-          className="absolute inset-0 flex items-center justify-center text-center px-8"
-          style={{
-            background: 'rgba(10,10,11,0.78)',
-            color: 'var(--lx-text-muted)',
-            borderRadius: 'var(--lx-radius-lg)',
-          }}
-        >
-          <div>
-            <Sparkles className="w-5 h-5 mx-auto mb-2" style={{ color: 'var(--lx-text-subtle)' }} />
-            <p className="text-[13px] font-medium mb-1" style={{ color: 'var(--lx-text)' }}>
-              No proposal yet
-            </p>
-            <p className="text-[11.5px]">
-              Upload a logo and click <strong>Generate theme</strong> to see the preview render with the proposed brand.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

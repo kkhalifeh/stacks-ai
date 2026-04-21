@@ -82,6 +82,47 @@ const pageModules = import.meta.glob<Record<string, FC>>('/stacks/*/pages/**/*.t
 const themeCssFiles = import.meta.glob<string>('/stacks/*/theme/*.css', { eager: true, query: '?raw', import: 'default' });
 const assetUrls = import.meta.glob<string>('/stacks/*/assets/**/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
 
+// ─── TENANT BRAND ──────────────────────────────────────────────
+// Tenant-level brand is loaded from /brand/. It serves as the default
+// theme + logo for any stack that doesn't override them in its stack.json.
+
+interface TenantManifest {
+  name: string;
+  subtitle?: string;
+  logo?: string;
+  theme?: string;
+}
+
+const tenantManifestRaw = import.meta.glob<TenantManifest>('/brand/tenant.json', { eager: true, import: 'default' });
+const tenantThemeCss = import.meta.glob<string>('/brand/*.css', { eager: true, query: '?raw', import: 'default' });
+const tenantAssets = import.meta.glob<string>('/brand/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
+
+export interface LoadedTenant {
+  name: string;
+  subtitle?: string;
+  logoUrl?: string;
+  themeCss?: string;
+  themePath?: string; // e.g. "theme.css" — relative to /brand/
+  logoPath?: string;  // e.g. "logo.png"
+}
+
+function loadTenant(): LoadedTenant | undefined {
+  const raw = tenantManifestRaw['/brand/tenant.json'];
+  if (!raw) return undefined;
+  const themePath = raw.theme ?? 'theme.css';
+  const logoPath = raw.logo;
+  return {
+    name: raw.name,
+    subtitle: raw.subtitle,
+    themePath,
+    logoPath,
+    themeCss: tenantThemeCss[`/brand/${themePath}`],
+    logoUrl: logoPath ? tenantAssets[`/brand/${logoPath}`] : undefined,
+  };
+}
+
+export const tenant: LoadedTenant | undefined = loadTenant();
+
 function stackIdFromPath(path: string): string {
   const match = path.match(/^\/stacks\/([^/]+)\//);
   if (!match) throw new Error(`Unexpected path: ${path}`);
@@ -155,13 +196,17 @@ function loadOne(raw: RawManifest): LoadedStack {
     console.warn(`[stacks] Missing component exports:\n  ${missing.join('\n  ')}`);
   }
 
+  // Resolve effective theme + logo: stack-level overrides win, tenant is the fallback.
+  const stackTheme = themeForStack(manifest.id, manifest.theme);
+  const stackLogo = logoUrlForStack(manifest.id, manifest.logo);
+
   return {
     id: manifest.id,
     name: manifest.name,
     subtitle: manifest.subtitle,
     format: manifest.format,
-    logoUrl: logoUrlForStack(manifest.id, manifest.logo),
-    themeCss: themeForStack(manifest.id, manifest.theme),
+    logoUrl: stackLogo ?? tenant?.logoUrl,
+    themeCss: stackTheme ?? tenant?.themeCss,
     binders,
     componentRegistry: registry,
     dir: `/stacks/${manifest.id}`,

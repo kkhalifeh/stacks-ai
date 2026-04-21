@@ -3,8 +3,6 @@
   "name": "MODEE AI-GIS Tender",
   "subtitle": "Proposal Builder",
   "format": "a4",
-  "theme": "theme/theme.css",
-  "logo": "assets/KinzIcon.png",
   "binders": [
     {
       "id": "info",
@@ -13,12 +11,27 @@
       "color": "var(--color-kinz-orange)",
       "passwordProtected": false,
       "documents": [
-        { "id": "info-1", "label": "INFO-1: CCD & Financials", "components": ["Info1CCD"] }
+        {
+          "id": "info-1",
+          "label": "INFO-1: CCD & Financials",
+          "components": [
+            "Info1CCD"
+          ]
+        }
       ],
       "attachments": [
-        { "label": "FY 2022 Financials", "url": "/financials/fs-2022.pdf" },
-        { "label": "FY 2023 Financials", "url": "/financials/fs-2023.pdf" },
-        { "label": "FY 2024 Financials", "url": "/financials/fs-2024.pdf" }
+        {
+          "label": "FY 2022 Financials",
+          "url": "/financials/fs-2022.pdf"
+        },
+        {
+          "label": "FY 2023 Financials",
+          "url": "/financials/fs-2023.pdf"
+        },
+        {
+          "label": "FY 2024 Financials",
+          "url": "/financials/fs-2024.pdf"
+        }
       ]
     },
     {
@@ -28,14 +41,98 @@
       "color": "var(--color-kinz-blue)",
       "passwordProtected": true,
       "documents": [
-        { "id": "cover", "label": "Cover", "components": ["CoverPage"] },
-        { "id": "tech-1", "label": "TECH-1: Cover Letter", "maxPages": 1, "components": ["Tech1CoverLetter"] },
-        { "id": "tech-2", "label": "TECH-2: Joint Team", "maxPages": 5, "components": ["Tech2JointTeam", "Tech2JointTeamP2", "Tech2JointTeamP3"] },
-        { "id": "tech-2a", "label": "TECH-2a: Company Experience", "maxPages": 5, "components": ["Tech2aCompanyExperience", "Tech2aCompanyExperienceP2", "Tech2aCompanyExperienceP3", "Tech2aCompanyExperienceP4", "Tech2aCompanyExperienceP5"] },
-        { "id": "tech-3", "label": "TECH-3: Methodology", "maxPages": 15, "components": ["Tech3Methodology", "Tech3P2", "Tech3P3", "Tech3P4", "Tech3P5", "Tech3P6", "Tech3P7", "Tech3P8", "Tech3P8b", "Tech3P9", "Tech3P10", "Tech3P11", "Tech3P12", "Tech3P13"] },
-        { "id": "tech-4", "label": "TECH-4: Work Schedule", "maxPages": 3, "components": ["Tech4WorkSchedule", "Tech4WorkScheduleP2", "Tech4WorkScheduleP3"] },
-        { "id": "tech-5", "label": "TECH-5: Personnel", "maxPages": 3, "components": ["Tech5Personnel", "Tech5PersonnelP2"] },
-        { "id": "tech-6", "label": "TECH-6: CVs", "maxPages": 10, "components": ["Tech6CV_Bushra_P1", "Tech6CV_Bushra_P2", "Tech6CV_Khaled", "Tech6CV_AbuJoudeh_P1", "Tech6CV_AbuJoudeh_P2", "Tech6CV_AlBzour", "Tech6CV_Duha", "Tech6CV_Osama"] }
+        {
+          "id": "cover",
+          "label": "Cover",
+          "components": [
+            "CoverPage"
+          ]
+        },
+        {
+          "id": "tech-1",
+          "label": "TECH-1: Cover Letter",
+          "maxPages": 1,
+          "components": [
+            "Tech1CoverLetter"
+          ]
+        },
+        {
+          "id": "tech-2",
+          "label": "TECH-2: Joint Team",
+          "maxPages": 5,
+          "components": [
+            "Tech2JointTeam",
+            "Tech2JointTeamP2",
+            "Tech2JointTeamP3"
+          ]
+        },
+        {
+          "id": "tech-2a",
+          "label": "TECH-2a: Company Experience",
+          "maxPages": 5,
+          "components": [
+            "Tech2aCompanyExperience",
+            "Tech2aCompanyExperienceP2",
+            "Tech2aCompanyExperienceP3",
+            "Tech2aCompanyExperienceP4",
+            "Tech2aCompanyExperienceP5"
+          ]
+        },
+        {
+          "id": "tech-3",
+          "label": "TECH-3: Methodology",
+          "maxPages": 15,
+          "components": [
+            "Tech3Methodology",
+            "Tech3P2",
+            "Tech3P3",
+            "Tech3P4",
+            "Tech3P5",
+            "Tech3P6",
+            "Tech3P7",
+            "Tech3P8",
+            "Tech3P8b",
+            "Tech3P9",
+            "Tech3P10",
+            "Tech3P11",
+            "Tech3P12",
+            "Tech3P13"
+          ]
+        },
+        {
+          "id": "tech-4",
+          "label": "TECH-4: Work Schedule",
+          "maxPages": 3,
+          "components": [
+            "Tech4WorkSchedule",
+            "Tech4WorkScheduleP2",
+            "Tech4WorkScheduleP3"
+          ]
+        },
+        {
+          "id": "tech-5",
+          "label": "TECH-5: Personnel",
+          "maxPages": 3,
+          "components": [
+            "Tech5Personnel",
+            "Tech5PersonnelP2"
+          ]
+        },
+        {
+          "id": "tech-6",
+          "label": "TECH-6: CVs",
+          "maxPages": 10,
+          "components": [
+            "Tech6CV_Bushra_P1",
+            "Tech6CV_Bushra_P2",
+            "Tech6CV_Khaled",
+            "Tech6CV_AbuJoudeh_P1",
+            "Tech6CV_AbuJoudeh_P2",
+            "Tech6CV_AlBzour",
+            "Tech6CV_Duha",
+            "Tech6CV_Osama"
+          ]
+        }
       ]
     },
     {
@@ -45,8 +142,20 @@
       "color": "var(--color-kinz-green)",
       "passwordProtected": true,
       "documents": [
-        { "id": "fin-1", "label": "FIN-1: Financial Proposal", "components": ["Fin1Submission"] },
-        { "id": "fin-2", "label": "FIN-2: Price Breakdown", "components": ["Fin2Breakdown"] }
+        {
+          "id": "fin-1",
+          "label": "FIN-1: Financial Proposal",
+          "components": [
+            "Fin1Submission"
+          ]
+        },
+        {
+          "id": "fin-2",
+          "label": "FIN-2: Price Breakdown",
+          "components": [
+            "Fin2Breakdown"
+          ]
+        }
       ]
     },
     {
@@ -56,11 +165,55 @@
       "color": "var(--color-text-muted)",
       "passwordProtected": false,
       "documents": [
-        { "id": "doc-researcher", "label": "Researcher Brief", "components": ["DocResearcherBrief"] },
-        { "id": "doc-forecasting", "label": "Forecasting Primer", "components": ["DocForecastingPrimerP1", "DocForecastingPrimerP2", "DocForecastingPrimerP3", "DocForecastingPrimerP4", "DocForecastingPrimerP5", "DocForecastingPrimerP6", "DocForecastingPrimerP7"] },
-        { "id": "doc-methodology", "label": "Methodology for Dr. Bushra", "components": ["DocMethodologyProposalP1", "DocMethodologyProposalP2", "DocMethodologyProposalP3", "DocMethodologyProposalP4"] },
-        { "id": "doc-agreement", "label": "Academic Agreement", "components": ["DocAcademicAgreementP1", "DocAcademicAgreementP2", "DocAcademicAgreementP3"] },
-        { "id": "doc-crosswalk", "label": "Implementation Crosswalk", "components": ["DocCrosswalkP1", "DocCrosswalkP2", "DocCrosswalkP3", "DocCrosswalkP4"] }
+        {
+          "id": "doc-researcher",
+          "label": "Researcher Brief",
+          "components": [
+            "DocResearcherBrief"
+          ]
+        },
+        {
+          "id": "doc-forecasting",
+          "label": "Forecasting Primer",
+          "components": [
+            "DocForecastingPrimerP1",
+            "DocForecastingPrimerP2",
+            "DocForecastingPrimerP3",
+            "DocForecastingPrimerP4",
+            "DocForecastingPrimerP5",
+            "DocForecastingPrimerP6",
+            "DocForecastingPrimerP7"
+          ]
+        },
+        {
+          "id": "doc-methodology",
+          "label": "Methodology for Dr. Bushra",
+          "components": [
+            "DocMethodologyProposalP1",
+            "DocMethodologyProposalP2",
+            "DocMethodologyProposalP3",
+            "DocMethodologyProposalP4"
+          ]
+        },
+        {
+          "id": "doc-agreement",
+          "label": "Academic Agreement",
+          "components": [
+            "DocAcademicAgreementP1",
+            "DocAcademicAgreementP2",
+            "DocAcademicAgreementP3"
+          ]
+        },
+        {
+          "id": "doc-crosswalk",
+          "label": "Implementation Crosswalk",
+          "components": [
+            "DocCrosswalkP1",
+            "DocCrosswalkP2",
+            "DocCrosswalkP3",
+            "DocCrosswalkP4"
+          ]
+        }
       ]
     }
   ]

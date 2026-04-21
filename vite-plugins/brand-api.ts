@@ -4,8 +4,7 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 
-const STACKS_DIR = 'stacks';
-const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const BRAND_DIR = 'brand';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
@@ -39,7 +38,7 @@ export interface ThemeProposal {
 const TOOL_SCHEMA = {
   name: 'propose_brand_theme',
   description:
-    'Propose a complete brand theme based on an uploaded logo and optional brand context. The theme will be used to style A4 documents and 16:9 slide decks.',
+    'Propose a complete brand theme based on an uploaded logo and optional brand context. The theme will be used to style A4 documents and 16:9 slide decks for this tenant.',
   input_schema: {
     type: 'object',
     required: ['description', 'palette', 'typography', 'radii', 'shadows'],
@@ -62,7 +61,7 @@ const TOOL_SCHEMA = {
           border: { type: 'string', description: 'Subtle border color as rgba() string.' },
           accents: {
             type: 'array',
-            description: 'Exactly 4 accent hex colors taken from the logo, ordered from warmest to coolest, for multi-color accent stripes and highlights.',
+            description: 'Exactly 4 accent hex colors taken from the logo, ordered warmest→coolest, for multi-color accent stripes and highlights.',
             minItems: 4,
             maxItems: 4,
             items: { type: 'string' },
@@ -73,7 +72,7 @@ const TOOL_SCHEMA = {
         type: 'object',
         required: ['heading_font', 'body_font'],
         properties: {
-          heading_font: { type: 'string', description: 'CSS font-family value for headings. Must be a widely available font or in the set: Inter, system-ui, Helvetica, Georgia, "Playfair Display", "IBM Plex Sans".' },
+          heading_font: { type: 'string', description: 'CSS font-family value for headings. Use: Inter, system-ui, Helvetica, Georgia, "Playfair Display", or "IBM Plex Sans".' },
           body_font: { type: 'string', description: 'CSS font-family value for body text.' },
           feature_settings: { type: 'string', description: 'Optional CSS font-feature-settings string.' },
         },
@@ -108,8 +107,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return JSON.parse(raw) as T;
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as T;
 }
 
 async function readBinaryBody(req: IncomingMessage, limit: number): Promise<Buffer> {
@@ -126,10 +124,6 @@ async function readBinaryBody(req: IncomingMessage, limit: number): Promise<Buff
 
 async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true; } catch { return false; }
-}
-
-function validStackId(id: string): boolean {
-  return ID_RE.test(id);
 }
 
 function proposalToCss(proposal: ThemeProposal): string {
@@ -158,7 +152,7 @@ function proposalToCss(proposal: ThemeProposal): string {
   --color-accent-3: ${a[2]};
   --color-accent-4: ${a[3]};
 
-  /* Legacy / Kinz compatibility: the tender stack uses these var names. */
+  /* Legacy compatibility: the Kinz tender pages reference these names directly. */
   --color-kinz-red: ${a[0]};
   --color-kinz-orange: ${a[1]};
   --color-kinz-yellow: ${a[2]};
@@ -204,29 +198,67 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
     name: 'brand-api',
     configureServer(server) {
       const root = server.config.root;
-      const stackDir = (id: string) => path.join(root, STACKS_DIR, id);
+      const brandDir = path.join(root, BRAND_DIR);
+      const manifestPath = path.join(brandDir, 'tenant.json');
+      const themePath = path.join(brandDir, 'theme.css');
+
+      const readManifest = async () => {
+        if (!(await exists(manifestPath))) return { name: 'My Brand', logo: 'logo.png', theme: 'theme.css' };
+        return JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+      };
+      const writeManifest = async (m: unknown) =>
+        fs.writeFile(manifestPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? '';
-        if (!url.startsWith('/__api/stacks/')) return next();
-
-        const m = url.match(/^\/__api\/stacks\/([^/?]+)\/brand(\/[^?]*)?(\?.*)?$/);
-        if (!m) return next();
+        if (!url.startsWith('/__api/brand')) return next();
 
         try {
-          const stackId = decodeURIComponent(m[1]);
-          const rest = (m[2] ?? '').replace(/^\//, '');
+          const [pathOnly] = url.split('?');
           const method = req.method ?? 'GET';
+          const rest = pathOnly.replace(/^\/__api\/brand\/?/, '').replace(/^\/+/, '');
 
-          if (!validStackId(stackId)) return sendJson(res, 400, { error: 'Invalid stack id' });
-          const dir = stackDir(stackId);
-          if (!(await exists(dir))) return sendJson(res, 404, { error: 'Stack not found' });
+          // GET /__api/brand — tenant metadata
+          if (!rest && method === 'GET') {
+            await fs.mkdir(brandDir, { recursive: true });
+            const manifest = await readManifest();
+            const logo = await findLogoFile(brandDir);
+            return sendJson(res, 200, {
+              name: manifest.name ?? 'My Brand',
+              subtitle: manifest.subtitle ?? '',
+              logo: logo?.name ?? null,
+              hasTheme: await exists(themePath),
+            });
+          }
 
-          const brandDir = path.join(dir, 'theme', 'brand-assets');
+          // PATCH /__api/brand — update tenant metadata (name/subtitle)
+          if (!rest && method === 'PATCH') {
+            let body: { name?: string; subtitle?: string };
+            try { body = await readJsonBody(req); }
+            catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+            await fs.mkdir(brandDir, { recursive: true });
+            const manifest = await readManifest();
+            if (typeof body.name === 'string' && body.name.trim().length > 0) manifest.name = body.name.trim();
+            if (typeof body.subtitle === 'string') manifest.subtitle = body.subtitle;
+            await writeManifest(manifest);
+            return sendJson(res, 200, { name: manifest.name, subtitle: manifest.subtitle });
+          }
 
-          // POST /brand/logo — upload logo as binary body
+          // GET /__api/brand/logo — serve the tenant logo
+          if (rest === 'logo' && method === 'GET') {
+            const logo = await findLogoFile(brandDir);
+            if (!logo) return sendJson(res, 404, { error: 'No logo uploaded' });
+            const data = await fs.readFile(logo.abs);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', mediaTypeForExt(logo.name));
+            res.end(data);
+            return;
+          }
+
+          // POST /__api/brand/logo — upload tenant logo
           if (rest === 'logo' && method === 'POST') {
             await fs.mkdir(brandDir, { recursive: true });
+            // Remove any existing logo
             const existing = await findLogoFile(brandDir);
             if (existing) await fs.rm(existing.abs, { force: true });
 
@@ -240,21 +272,15 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             const body = await readBinaryBody(req, MAX_UPLOAD_BYTES);
             const target = path.join(brandDir, `logo${ext}`);
             await fs.writeFile(target, body);
+
+            const manifest = await readManifest();
+            manifest.logo = `logo${ext}`;
+            await writeManifest(manifest);
+
             return sendJson(res, 201, { name: `logo${ext}`, size: body.length });
           }
 
-          // GET /brand/logo — return the uploaded logo if present
-          if (rest === 'logo' && method === 'GET') {
-            const logo = await findLogoFile(brandDir);
-            if (!logo) return sendJson(res, 404, { error: 'No logo uploaded' });
-            const data = await fs.readFile(logo.abs);
-            res.statusCode = 200;
-            res.setHeader('Content-Type', mediaTypeForExt(logo.name));
-            res.end(data);
-            return;
-          }
-
-          // POST /brand/generate — call Claude with the logo + brand context
+          // POST /__api/brand/generate — Claude call
           if (rest === 'generate' && method === 'POST') {
             if (!apiKey) {
               return sendJson(res, 500, {
@@ -271,8 +297,7 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             try { body = await readJsonBody(req); }
             catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
 
-            const imageBytes = await fs.readFile(logo.abs);
-            const imageBase64 = imageBytes.toString('base64');
+            const imageBase64 = (await fs.readFile(logo.abs)).toString('base64');
             const mediaType = mediaTypeForExt(logo.name);
 
             const client = new Anthropic({ apiKey });
@@ -281,7 +306,7 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               body.keywords ? `Keywords / tone: ${body.keywords}` : '',
               body.feedback ? `User feedback on previous proposal (act on this): ${body.feedback}` : '',
               '',
-              'Analyze the uploaded logo. Extract the dominant palette (for the `primary` and `accents` fields, pull colors directly from the logo when possible). Propose a complete brand theme usable for both A4 print documents and 16:9 slide decks. Be precise with hex values — do not invent colors that are not in the logo for the `primary` / `accents`. For neutrals (text, light_bg, dark, border) choose tones that pair well with the logo palette, not the logo colors themselves.',
+              'Analyze the uploaded logo. Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 print documents and 16:9 slide decks. Be precise with hex values — do not invent colors that are not in the logo for `primary`/`accents`. For neutrals (text, light_bg, dark, border) choose tones that pair well with the logo, not the logo colors themselves.',
             ].filter(Boolean).join('\n');
 
             try {
@@ -305,15 +330,18 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               if (!toolBlock || toolBlock.type !== 'tool_use') {
                 return sendJson(res, 502, { error: 'Claude did not return a structured proposal.' });
               }
-              const proposal = toolBlock.input as ThemeProposal;
-              return sendJson(res, 200, { proposal, model, usage: response.usage });
+              return sendJson(res, 200, {
+                proposal: toolBlock.input as ThemeProposal,
+                model,
+                usage: response.usage,
+              });
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               return sendJson(res, 502, { error: `Claude API error: ${msg}` });
             }
           }
 
-          // POST /brand/apply — write theme.css + update stack.json logo pointer
+          // POST /__api/brand/apply — write brand/theme.css
           if (rest === 'apply' && method === 'POST') {
             let body: { proposal: ThemeProposal };
             try { body = await readJsonBody(req); }
@@ -322,20 +350,14 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               return sendJson(res, 400, { error: 'proposal is required' });
             }
 
-            const themePath = path.join(dir, 'theme', 'theme.css');
-            await fs.mkdir(path.dirname(themePath), { recursive: true });
+            await fs.mkdir(brandDir, { recursive: true });
             await fs.writeFile(themePath, proposalToCss(body.proposal), 'utf8');
 
-            // Update stack.json logo pointer if a logo was uploaded
-            const logo = await findLogoFile(brandDir);
-            if (logo) {
-              const manifestPath = path.join(dir, 'stack.json');
-              const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-              manifest.logo = `theme/brand-assets/${logo.name}`;
-              await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-            }
+            const manifest = await readManifest();
+            manifest.theme = 'theme.css';
+            await writeManifest(manifest);
 
-            return sendJson(res, 200, { applied: true, logo: logo?.name ?? null });
+            return sendJson(res, 200, { applied: true });
           }
 
           return next();
