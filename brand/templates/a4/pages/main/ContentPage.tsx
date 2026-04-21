@@ -1,22 +1,25 @@
+import { useRef } from 'react';
+import { useStructural } from '@/app/useStructural';
 import logo from '../../assets/logo.png';
+import { AccentStripe } from './_AccentStripe';
 
 export function ContentPage() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { accentStripe } = useStructural(ref);
+
   return (
-    <div className="w-[794px] h-[1123px] flex flex-col">
-      <div className="flex h-1.5 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-kinz-red)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-orange)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-yellow)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-green)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-blue)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-navy)' }} />
-      </div>
+    <div
+      ref={ref}
+      className="w-[794px] h-[1123px] flex flex-col relative"
+      style={{ fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
+    >
+      <AccentStripe variant={accentStripe} height={6} />
 
       <div className="flex-1 px-12 pt-8 pb-5 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <img src={logo} alt="" className="w-7 h-7 opacity-20" />
-            <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading, inherit)' }}>
               Section Title
             </h1>
           </div>
@@ -31,12 +34,12 @@ export function ContentPage() {
 
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-5 rounded-full" style={{ background: 'var(--color-kinz-blue)' }} />
-          <h2 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>
+          <h2 className="text-base font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading, inherit)' }}>
             A. Heading
           </h2>
         </div>
 
-        <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--color-text)' }}>
+        <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading, inherit)' }}>
           1. Sub-heading
         </h3>
 

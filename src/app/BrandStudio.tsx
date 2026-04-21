@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Check, Image as ImageIcon, Sparkles, Star, Trash2, Upload } from 'lucide-react';
 import {
   deleteTheme,
+  ensureGoogleFonts,
   extractRootVars,
   generateTenantTheme,
   getTenant,
+  googleFontsForProposal,
   proposalToCssVars,
   saveTheme,
   setDefaultTheme,
@@ -15,6 +17,7 @@ import {
   type TenantBrand,
   type ThemeMeta,
   type ThemeProposal,
+  type ThemeVariant,
 } from './brand-api';
 import { applyRawTheme, tenant as initialTenant, tenantTemplates, type TenantThemeInfo } from './stacks';
 import { ReferencesPanel } from './components/brand/ReferencesPanel';
@@ -55,6 +58,8 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
   const [logoVersion, setLogoVersion] = useState(0);
   const [hasLogo, setHasLogo] = useState(Boolean(initialTenant?.logoUrl));
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
+  const [variants, setVariants] = useState<ThemeVariant[] | null>(null);
+  const [activeVariantIdx, setActiveVariantIdx] = useState<number>(0);
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(initialTenant?.activeThemeId ?? null);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -110,12 +115,19 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
       if (tenantData && name && name !== tenantData.name) {
         await updateTenant({ name: name.trim() });
       }
-      const { proposal } = await generateTenantTheme({
+      const { variants } = await generateTenantTheme({
         name: name.trim() || 'Brand',
         keywords: keywords.trim() || undefined,
         feedback: feedback.trim() || undefined,
+        count: 3,
       });
-      setProposal(proposal);
+      setVariants(variants);
+      setActiveVariantIdx(0);
+      const firstProposal = variants[0]?.proposal ?? null;
+      setProposal(firstProposal);
+      if (firstProposal) ensureGoogleFonts(googleFontsForProposal(firstProposal));
+      // Preload fonts for all variants so thumbnails render correctly
+      variants.forEach(v => ensureGoogleFonts(googleFontsForProposal(v.proposal)));
       setFeedback('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed');
@@ -473,7 +485,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
                   Save &amp; set as default
                 </button>
                 <button
-                  onClick={() => setProposal(null)}
+                  onClick={() => { setProposal(null); setVariants(null); setActiveVariantIdx(0); }}
                   className="text-[11px] py-1.5 transition-colors"
                   style={{ color: 'var(--lx-text-subtle)' }}
                 >
@@ -502,13 +514,59 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
             <TabBtn label="Slide Content" active={previewTab === 'slide-content'} onClick={() => setPreviewTab('slide-content')} />
           </div>
           <span className="ml-auto text-[11px]" style={{ color: 'var(--lx-text-faint)' }}>
-            {proposal
-              ? 'Showing unsaved proposal'
-              : selectedThemeId
-                ? `Showing ${initialThemesFromLoader.find(t => t.id === selectedThemeId)?.name ?? selectedThemeId}`
-                : 'No theme selected'}
+            {variants && variants.length > 0
+              ? `Variant ${activeVariantIdx + 1} of ${variants.length} — ${variants[activeVariantIdx]?.direction}`
+              : proposal
+                ? 'Showing unsaved proposal'
+                : selectedThemeId
+                  ? `Showing ${initialThemesFromLoader.find(t => t.id === selectedThemeId)?.name ?? selectedThemeId}`
+                  : 'No theme selected'}
           </span>
         </div>
+
+        {variants && variants.length > 1 && (
+          <div
+            className="px-8 py-3 flex items-center gap-2 border-b flex-shrink-0 overflow-x-auto"
+            style={{ borderColor: 'var(--lx-border)', background: 'var(--lx-surface)' }}
+          >
+            <span className="text-[10px] uppercase tracking-[0.1em] font-semibold mr-2" style={{ color: 'var(--lx-text-faint)' }}>
+              Variants
+            </span>
+            {variants.map((v, i) => {
+              const active = i === activeVariantIdx;
+              const p = v.proposal.palette;
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setActiveVariantIdx(i);
+                    setProposal(v.proposal);
+                    ensureGoogleFonts(googleFontsForProposal(v.proposal));
+                  }}
+                  className="flex items-center gap-2 px-2.5 py-1.5 transition-colors"
+                  style={{
+                    background: active ? 'var(--lx-accent-soft)' : 'var(--lx-surface-2)',
+                    border: `1px solid ${active ? 'var(--lx-accent)' : 'var(--lx-border)'}`,
+                    borderRadius: 'var(--lx-radius-sm)',
+                    color: active ? 'var(--lx-text)' : 'var(--lx-text-muted)',
+                  }}
+                >
+                  <div className="flex gap-0.5">
+                    <span className="block w-3 h-3 rounded-[2px]" style={{ background: p.primary, border: '1px solid var(--lx-border)' }} />
+                    {p.accents.slice(0, 3).map((c, j) => (
+                      <span
+                        key={j}
+                        className="block w-3 h-3 rounded-[2px]"
+                        style={{ background: c, border: '1px solid var(--lx-border)' }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] font-medium">{v.direction}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto p-10" style={{ background: 'var(--lx-bg)' }}>
           <div className={`${PREVIEW_SCOPE} min-h-full flex items-center justify-center`}>

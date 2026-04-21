@@ -1,63 +1,95 @@
+import { useRef } from 'react';
+import { useStructural } from '@/app/useStructural';
 import logoWhite from '../../assets/logo-white.png';
+import logoDark from '../../assets/logo.png';
+import { AccentStripe } from './_AccentStripe';
+import { CoverBackground } from './_Cover';
 
 export function TitlePage() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { coverStyle, accentStripe, titleEmphasis } = useStructural(ref);
+
+  const onDark = coverStyle !== 'solid-light';
+  const textColor = onDark ? '#ffffff' : 'var(--color-text)';
+  const subtleColor = onDark ? 'rgba(255,255,255,0.7)' : 'var(--color-text-muted)';
+  const faintColor = onDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)';
+  const panelBg = onDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+  const logo = onDark ? logoWhite : logoDark;
+
+  const titleClass =
+    titleEmphasis === 'display-eyebrow'
+      ? 'text-4xl font-bold leading-tight max-w-[640px]'
+      : titleEmphasis === 'stacked-labels'
+        ? 'text-2xl font-bold leading-tight max-w-[600px]'
+        : 'text-3xl font-bold leading-tight max-w-[600px]';
+
   return (
-    <div className="w-[794px] h-[1123px] flex flex-col">
-      <div className="flex h-2 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-kinz-red)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-orange)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-yellow)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-green)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-blue)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-navy)' }} />
-      </div>
+    <div
+      ref={ref}
+      className="w-[794px] h-[1123px] flex flex-col"
+      style={{ fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
+    >
+      <AccentStripe variant={accentStripe} height={8} />
 
-      <div className="flex-1 flex flex-col p-12" style={{ background: 'var(--color-dark)' }}>
-        <img src={logoWhite} alt="" className="h-14 w-auto object-contain self-start mb-16" />
+      <CoverBackground variant={coverStyle}>
+        <div className="flex-1 flex flex-col p-12 relative z-10">
+          <img src={logo} alt="" className="h-14 w-auto object-contain self-start mb-16" />
 
-        <p
-          className="text-sm font-medium tracking-widest uppercase mb-6"
-          style={{ color: 'var(--color-primary-light)' }}
-        >
-          Proposal
-        </p>
+          <p
+            className="text-sm font-medium tracking-widest uppercase mb-6"
+            style={{
+              color: onDark ? 'var(--color-primary-light)' : 'var(--color-primary)',
+              fontFamily: 'var(--font-body, inherit)',
+            }}
+          >
+            {titleEmphasis === 'stacked-labels' ? 'Proposal · Technical · Document' : 'Proposal'}
+          </p>
 
-        <h1 className="text-3xl font-bold text-white mb-3 leading-tight max-w-[600px]">
-          Project Title
-        </h1>
+          <h1
+            className={titleClass}
+            style={{ color: textColor, fontFamily: 'var(--font-heading, inherit)' }}
+          >
+            Project Title
+          </h1>
 
-        <div className="flex gap-1 my-6">
-          <div className="h-1 w-8 rounded-full" style={{ background: 'var(--color-kinz-blue)' }} />
-          <div className="h-1 w-4 rounded-full" style={{ background: 'var(--color-kinz-green)' }} />
-          <div className="h-1 w-2 rounded-full" style={{ background: 'var(--color-kinz-orange)' }} />
-        </div>
-
-        <p className="text-lg text-white/70 mb-1">Subtitle goes here</p>
-        <p className="text-sm text-white/40 max-w-[500px]">
-          One-line descriptor that sits under the subtitle. Replace with the real project context.
-        </p>
-
-        <div className="mt-auto rounded-lg p-6" style={{ background: 'rgba(255,255,255,0.05)' }}>
-          <div className="grid grid-cols-2 gap-y-3 text-sm">
-            <div>
-              <p className="text-white/40 text-xs mb-1">Prepared for</p>
-              <p className="text-white/80">Client Name</p>
+          {accentStripe !== 'none' && (
+            <div className="flex gap-1 my-6">
+              <div className="h-1 w-8 rounded-full" style={{ background: 'var(--color-primary)' }} />
+              <div className="h-1 w-4 rounded-full" style={{ background: 'var(--color-accent-3, var(--color-primary-light))' }} />
+              <div className="h-1 w-2 rounded-full" style={{ background: 'var(--color-accent-2, var(--color-primary))' }} />
             </div>
-            <div>
-              <p className="text-white/40 text-xs mb-1">Date</p>
-              <p className="text-white/80">Month Year</p>
-            </div>
-            <div>
-              <p className="text-white/40 text-xs mb-1">Prepared by</p>
-              <p className="text-white/80">Your organization</p>
-            </div>
-            <div>
-              <p className="text-white/40 text-xs mb-1">Reference</p>
-              <p className="text-white/80">Document reference</p>
+          )}
+
+          <p className="text-lg mb-1" style={{ color: subtleColor }}>Subtitle goes here</p>
+          <p className="text-sm max-w-[500px]" style={{ color: faintColor }}>
+            One-line descriptor that sits under the subtitle. Replace with the real project context.
+          </p>
+
+          <div
+            className="mt-auto rounded-lg p-6"
+            style={{ background: panelBg, borderRadius: 'var(--radius-lg, 14px)' }}
+          >
+            <div className="grid grid-cols-2 gap-y-3 text-sm">
+              <div>
+                <p className="text-xs mb-1" style={{ color: faintColor }}>Prepared for</p>
+                <p style={{ color: subtleColor }}>Client Name</p>
+              </div>
+              <div>
+                <p className="text-xs mb-1" style={{ color: faintColor }}>Date</p>
+                <p style={{ color: subtleColor }}>Month Year</p>
+              </div>
+              <div>
+                <p className="text-xs mb-1" style={{ color: faintColor }}>Prepared by</p>
+                <p style={{ color: subtleColor }}>Your organization</p>
+              </div>
+              <div>
+                <p className="text-xs mb-1" style={{ color: faintColor }}>Reference</p>
+                <p style={{ color: subtleColor }}>Document reference</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </CoverBackground>
 
       <div
         className="px-8 py-3 flex justify-between items-center text-xs bg-white"

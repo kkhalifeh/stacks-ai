@@ -1,16 +1,25 @@
+import { useRef } from 'react';
+import { useStructural } from '@/app/useStructural';
 import logo from '../../assets/logo.png';
+import { AccentStripe } from '../../../a4/pages/main/_AccentStripe';
 
 export function ContentSlide() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { accentStripe, contentGrid } = useStructural(ref);
+  const cols = contentGrid === 'single-column' ? 1 : contentGrid === 'two-column' ? 2 : 3;
+  const cards = [
+    { n: '01', title: 'First pillar', accent: 'var(--color-accent-1, var(--color-kinz-red))' },
+    { n: '02', title: 'Second pillar', accent: 'var(--color-primary)' },
+    { n: '03', title: 'Third pillar', accent: 'var(--color-accent-3, var(--color-kinz-green))' },
+  ].slice(0, cols);
+
   return (
-    <div className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden" style={{ background: 'white' }}>
-      <div className="flex h-1.5 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-kinz-red)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-orange)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-yellow)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-green)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-blue)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-navy)' }} />
-      </div>
+    <div
+      ref={ref}
+      className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden"
+      style={{ background: 'white', fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
+    >
+      <AccentStripe variant={accentStripe} height={6} />
 
       <div className="flex-1 px-20 pt-10 pb-10 flex flex-col" style={{ color: 'var(--color-text)' }}>
         {/* Header row */}
@@ -30,7 +39,7 @@ export function ContentSlide() {
         {/* Heading block with left accent bar */}
         <div className="flex items-center gap-3 mb-2">
           <div className="w-1.5 h-8 rounded-full" style={{ background: 'var(--color-kinz-blue)' }} />
-          <h2 className="text-3xl font-bold" style={{ color: 'var(--color-text)' }}>
+          <h2 className="text-3xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading, inherit)' }}>
             Slide Heading
           </h2>
         </div>
@@ -38,13 +47,12 @@ export function ContentSlide() {
           One-paragraph intro that frames the point of this slide. Replace with real context.
         </p>
 
-        {/* Three Kinz-colored cards */}
-        <div className="grid grid-cols-3 gap-5 flex-1">
-          {[
-            { n: '01', title: 'First pillar', accent: 'var(--color-kinz-red)' },
-            { n: '02', title: 'Second pillar', accent: 'var(--color-kinz-blue)' },
-            { n: '03', title: 'Third pillar', accent: 'var(--color-kinz-green)' },
-          ].map(card => (
+        {/* Cards — count driven by content_grid */}
+        <div
+          className="grid gap-5 flex-1"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {cards.map(card => (
             <div
               key={card.n}
               className="p-6 flex flex-col rounded-lg"
@@ -53,7 +61,7 @@ export function ContentSlide() {
               <p className="text-xs uppercase tracking-widest font-semibold mb-3" style={{ color: 'var(--color-text-muted)' }}>
                 {card.n}
               </p>
-              <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--color-text)' }}>
+              <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading, inherit)' }}>
                 {card.title}
               </h3>
               <p className="text-[12px] leading-[1.6] flex-1" style={{ color: 'var(--color-text-muted)' }}>

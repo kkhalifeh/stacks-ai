@@ -1,3 +1,9 @@
+export type CoverStyle = 'solid-dark' | 'solid-light' | 'gradient-radial' | 'gradient-linear' | 'split' | 'image-led';
+export type AccentStripe = 'rainbow-6' | 'triplet' | 'single-bar' | 'corner-mark' | 'none';
+export type ShapeLanguage = 'sharp' | 'rounded' | 'soft-organic';
+export type ContentGrid = 'single-column' | 'two-column' | 'three-column-cards';
+export type TitleEmphasis = 'large-heading' | 'display-eyebrow' | 'stacked-labels';
+
 export interface ThemeProposal {
   description: string;
   palette: {
@@ -18,6 +24,13 @@ export interface ThemeProposal {
   };
   radii: { sm: number; md: number; lg: number };
   shadows: { resting: string; elevated: string };
+  structural?: {
+    cover_style: CoverStyle;
+    accent_stripe: AccentStripe;
+    shape_language: ShapeLanguage;
+    content_grid: ContentGrid;
+    title_emphasis: TitleEmphasis;
+  };
 }
 
 export interface ThemeMeta {
@@ -73,15 +86,21 @@ export async function uploadTenantLogo(file: File): Promise<{ name: string; size
   return handle(res);
 }
 
+export interface ThemeVariant {
+  direction: string;
+  proposal: ThemeProposal;
+}
+
 export async function generateTenantTheme(input: {
   name: string;
   keywords?: string;
   feedback?: string;
-}): Promise<{ proposal: ThemeProposal; model: string }> {
+  count?: number;
+}): Promise<{ variants: ThemeVariant[]; proposal: ThemeProposal; model: string; referencesUsed?: string[] }> {
   const res = await fetch('/__api/brand/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ count: 3, ...input }),
   });
   return handle(res);
 }
@@ -174,6 +193,11 @@ export function proposalToCssVars(p: ThemeProposal): string {
     --radius-lg: ${p.radii.lg}px;
     --shadow-resting: ${p.shadows.resting};
     --shadow-elevated: ${p.shadows.elevated};
+    --cover-style: ${p.structural?.cover_style ?? 'solid-dark'};
+    --accent-stripe: ${p.structural?.accent_stripe ?? 'rainbow-6'};
+    --shape-language: ${p.structural?.shape_language ?? 'rounded'};
+    --content-grid: ${p.structural?.content_grid ?? 'three-column-cards'};
+    --title-emphasis: ${p.structural?.title_emphasis ?? 'large-heading'};
   `.trim();
 }
 
@@ -181,4 +205,44 @@ export function proposalToCssVars(p: ThemeProposal): string {
 export function extractRootVars(css: string): string {
   const match = css.match(/:root\s*\{([\s\S]*?)\}/);
   return match ? match[1].trim() : '';
+}
+
+const SYSTEM_FONT_TOKENS = new Set([
+  'inter', 'system-ui', '-apple-system', 'blinkmacsystemfont', 'segoe ui',
+  'roboto', 'helvetica', 'helvetica neue', 'arial', 'sans-serif', 'serif',
+  'monospace', 'ui-sans-serif', 'ui-serif', 'ui-monospace', 'georgia',
+  'times new roman', 'courier new',
+]);
+
+function primaryFamily(value: string): string {
+  const first = value.split(',')[0].trim();
+  return first.replace(/^["']|["']$/g, '');
+}
+
+export function googleFontsForProposal(p: ThemeProposal): string[] {
+  const out: string[] = [];
+  for (const value of [p.typography.heading_font, p.typography.body_font]) {
+    if (!value) continue;
+    const name = primaryFamily(value);
+    if (!name || SYSTEM_FONT_TOKENS.has(name.toLowerCase())) continue;
+    out.push(name);
+  }
+  return Array.from(new Set(out));
+}
+
+/** Ensure a <link rel="stylesheet"> for the given Google Font families is present in <head>. Idempotent. */
+export function ensureGoogleFonts(families: string[]): void {
+  if (typeof document === 'undefined' || families.length === 0) return;
+  const params = families
+    .map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;500;600;700`)
+    .join('&');
+  const href = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+  const key = 'data-brand-font-key';
+  const existing = document.querySelector<HTMLLinkElement>(`link[${key}="${href}"]`);
+  if (existing) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.setAttribute(key, href);
+  document.head.appendChild(link);
 }

@@ -14,3 +14,12 @@
     color: var(--lx-text);
   }
 }
+
+/* Default structural tokens (used when a theme doesn't specify them). */
+:root {
+  --cover-style: solid-dark;
+  --accent-stripe: rainbow-6;
+  --shape-language: rounded;
+  --content-grid: three-column-cards;
+  --title-emphasis: large-heading;
+}

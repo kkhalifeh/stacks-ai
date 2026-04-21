@@ -17,6 +17,12 @@ interface BrandApiOptions {
   model?: string;
 }
 
+export type CoverStyle = 'solid-dark' | 'solid-light' | 'gradient-radial' | 'gradient-linear' | 'split' | 'image-led';
+export type AccentStripe = 'rainbow-6' | 'triplet' | 'single-bar' | 'corner-mark' | 'none';
+export type ShapeLanguage = 'sharp' | 'rounded' | 'soft-organic';
+export type ContentGrid = 'single-column' | 'two-column' | 'three-column-cards';
+export type TitleEmphasis = 'large-heading' | 'display-eyebrow' | 'stacked-labels';
+
 export interface ThemeProposal {
   description: string;
   palette: {
@@ -37,6 +43,13 @@ export interface ThemeProposal {
   };
   radii: { sm: number; md: number; lg: number };
   shadows: { resting: string; elevated: string };
+  structural?: {
+    cover_style: CoverStyle;
+    accent_stripe: AccentStripe;
+    shape_language: ShapeLanguage;
+    content_grid: ContentGrid;
+    title_emphasis: TitleEmphasis;
+  };
 }
 
 const TOOL_SCHEMA = {
@@ -44,7 +57,7 @@ const TOOL_SCHEMA = {
   description: 'Propose a complete brand theme based on an uploaded logo and optional brand context.',
   input_schema: {
     type: 'object',
-    required: ['description', 'palette', 'typography', 'radii', 'shadows'],
+    required: ['description', 'palette', 'typography', 'radii', 'shadows', 'structural'],
     properties: {
       description: { type: 'string', description: '3-4 sentence rationale.' },
       palette: {
@@ -62,8 +75,9 @@ const TOOL_SCHEMA = {
         type: 'object',
         required: ['heading_font', 'body_font'],
         properties: {
-          heading_font: { type: 'string' }, body_font: { type: 'string' },
-          feature_settings: { type: 'string' },
+          heading_font: { type: 'string', description: 'CSS font-family for headings. May be ANY Google Font family (e.g., "Fraunces", "Space Grotesk", "Bricolage Grotesque", "Instrument Serif", "DM Sans", "Manrope", "Playfair Display") or a system font. The Google Font will be auto-imported at apply time. Pick personality to match keywords: display for "fun"/"editorial", geometric sans for "technical", humanist serif for "classical", etc.' },
+          body_font: { type: 'string', description: 'CSS font-family for body text. May be any Google Font or system font. Often paired contrastingly with heading_font (e.g., serif heading + sans body).' },
+          feature_settings: { type: 'string', description: 'Optional CSS font-feature-settings string, e.g. \'"cv11", "ss01"\'.' },
         },
       },
       radii: {
@@ -73,6 +87,38 @@ const TOOL_SCHEMA = {
       shadows: {
         type: 'object', required: ['resting', 'elevated'],
         properties: { resting: { type: 'string' }, elevated: { type: 'string' } },
+      },
+      structural: {
+        type: 'object',
+        description: 'Structural design choices that drive HOW the canvases are laid out. Use this to express layout decisions from the keywords (e.g., "multi gradient" → cover_style gradient-radial or gradient-linear; "minimal" → accent_stripe none or corner-mark). Pick deliberately — do not default everything.',
+        required: ['cover_style', 'accent_stripe', 'shape_language', 'content_grid', 'title_emphasis'],
+        properties: {
+          cover_style: {
+            type: 'string',
+            enum: ['solid-dark', 'solid-light', 'gradient-radial', 'gradient-linear', 'split', 'image-led'],
+            description: 'Treatment for title pages/slides. solid-dark = dark wall (current Kinz default). solid-light = light/cream wall. gradient-radial = soft radial wash in brand colors. gradient-linear = two-tone angled gradient. split = two colored halves. image-led = large focal imagery area.',
+          },
+          accent_stripe: {
+            type: 'string',
+            enum: ['rainbow-6', 'triplet', 'single-bar', 'corner-mark', 'none'],
+            description: 'Top accent treatment. rainbow-6 = the current 6-color stripe. triplet = three weighted bars. single-bar = one primary-colored bar. corner-mark = small corner block. none = no stripe (minimal).',
+          },
+          shape_language: {
+            type: 'string',
+            enum: ['sharp', 'rounded', 'soft-organic'],
+            description: 'Overall shape feel. sharp = minimal radii, crisp edges. rounded = comfortable 8-14px radii. soft-organic = larger radii, asymmetric blobs.',
+          },
+          content_grid: {
+            type: 'string',
+            enum: ['single-column', 'two-column', 'three-column-cards'],
+            description: 'Default content layout inside pages/slides.',
+          },
+          title_emphasis: {
+            type: 'string',
+            enum: ['large-heading', 'display-eyebrow', 'stacked-labels'],
+            description: 'How the title page reads. large-heading = big title dominates. display-eyebrow = small eyebrow label + big statement. stacked-labels = multiple small labels stacked.',
+          },
+        },
       },
     },
   },
@@ -115,13 +161,49 @@ function slugify(s: string): string {
     .slice(0, 64);
 }
 
+// System/generic font keywords that should NOT be fetched from Google Fonts.
+const SYSTEM_FONT_TOKENS = new Set([
+  'inter', 'system-ui', '-apple-system', 'blinkmacsystemfont', 'segoe ui',
+  'roboto', 'helvetica', 'helvetica neue', 'arial', 'sans-serif', 'serif',
+  'monospace', 'ui-sans-serif', 'ui-serif', 'ui-monospace', 'georgia',
+  'times new roman', 'courier new',
+]);
+
+/** Extract a single family name from a CSS font-family value like `"Fraunces", serif`. */
+function primaryFamily(value: string): string {
+  const first = value.split(',')[0].trim();
+  return first.replace(/^["']|["']$/g, '');
+}
+
+function isGoogleFontCandidate(value: string): string | null {
+  const name = primaryFamily(value);
+  if (!name) return null;
+  if (SYSTEM_FONT_TOKENS.has(name.toLowerCase())) return null;
+  return name;
+}
+
+function googleFontImportUrl(families: string[]): string | null {
+  const unique = Array.from(new Set(families.filter(Boolean)));
+  if (!unique.length) return null;
+  const params = unique
+    .map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;500;600;700`)
+    .join('&');
+  return `https://fonts.googleapis.com/css2?${params}&display=swap`;
+}
+
 function proposalToCss(proposal: ThemeProposal, themeName: string): string {
   const p = proposal.palette;
   const t = proposal.typography;
   const r = proposal.radii;
   const s = proposal.shadows;
   const a = p.accents;
-  return `/*
+
+  const headingGoogle = isGoogleFontCandidate(t.heading_font);
+  const bodyGoogle = isGoogleFontCandidate(t.body_font);
+  const importFamilies = [headingGoogle, bodyGoogle].filter((x): x is string => Boolean(x));
+  const importUrl = googleFontImportUrl(importFamilies);
+  const importLine = importUrl ? `@import url('${importUrl}');\n\n` : '';
+  return `${importLine}/*
   ${themeName} — generated by Brand Studio.
   ${proposal.description.replace(/\*\//g, '* /')}
 */
@@ -158,6 +240,13 @@ function proposalToCss(proposal: ThemeProposal, themeName: string): string {
 
   --shadow-resting: ${s.resting};
   --shadow-elevated: ${s.elevated};
+
+  /* Structural design decisions. Templates branch on these. */
+  --cover-style: ${proposal.structural?.cover_style ?? 'solid-dark'};
+  --accent-stripe: ${proposal.structural?.accent_stripe ?? 'rainbow-6'};
+  --shape-language: ${proposal.structural?.shape_language ?? 'rounded'};
+  --content-grid: ${proposal.structural?.content_grid ?? 'three-column-cards'};
+  --title-emphasis: ${proposal.structural?.title_emphasis ?? 'large-heading'};
 }
 `;
 }
@@ -354,9 +443,29 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               return sendJson(res, 400, { error: 'Upload a logo first.' });
             }
 
-            let body: { name?: string; keywords?: string; feedback?: string };
+            let body: { name?: string; keywords?: string; feedback?: string; count?: number };
             try { body = await readJsonBody(req); }
             catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+
+            const count = Math.max(1, Math.min(4, body.count ?? 3));
+            const BIASES: Array<{ label: string; nudge: string }> = [
+              {
+                label: 'Balanced',
+                nudge: 'Balanced direction: honor keywords directly. Pick the most natural interpretation.',
+              },
+              {
+                label: 'Editorial',
+                nudge: 'Editorial direction: pull toward a restrained, more serious treatment. Serif or refined sans typography. Muted palette with strong contrast. cover_style biased toward solid-light or solid-dark. accent_stripe biased toward single-bar or corner-mark. Minimal decoration.',
+              },
+              {
+                label: 'Expressive',
+                nudge: 'Expressive direction: push bolder and more experimental. Saturated primary, unusual neutral temperature (warm cream, deep plum, etc.). Display typography (Bricolage Grotesque, Fraunces, Space Grotesk). cover_style biased toward gradient-radial, gradient-linear, or split. accent_stripe biased toward rainbow-6 or triplet.',
+              },
+              {
+                label: 'Minimal',
+                nudge: 'Minimal direction: strip to essentials. Near-monochrome palette using one logo hue. Geometric sans (Inter/Manrope) at tight weights. cover_style solid-light or solid-dark. accent_stripe none or corner-mark. Sharp shape_language.',
+              },
+            ];
 
             const imageBase64 = (await fs.readFile(logo.abs)).toString('base64');
             const mediaType = mediaTypeForExt(logo.name);
@@ -381,39 +490,79 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
 
             const client = new Anthropic({ apiKey });
             const userText = [
-              `Brand name: ${body.name ?? 'Unnamed'}`,
-              body.keywords ? `Keywords / tone: ${body.keywords}` : '',
-              body.feedback ? `User feedback (act on this): ${body.feedback}` : '',
+              `# Your job`,
+              `Propose a brand theme that will style four specific canvases: A4 Title (portrait cover), A4 Content (portrait document page with body copy and callouts), Slide Title (16:9 landscape cover), Slide Content (16:9 landscape with a 3-card grid). The tokens you return — palette, typography, radii, shadows — drive ALL four layouts. A strong proposal looks deliberately considered across all of them, not just a recolored logo.`,
+              ``,
+              `# Inputs you have`,
+              `1. Logo (the first image attached). Source of accent colors; may inform the primary.`,
+              body.name ? `2. Brand name: "${body.name}".` : '',
+              body.keywords ? `3. Keywords / tone (BINDING stylistic direction — honor this strongly): "${body.keywords}".` : '',
               refs.length
-                ? `The user attached ${refs.length} reference file(s) (${refs.map(r => r.name).join(', ')}). Treat them as style inspiration — match their mood, typographic feel, color temperature, layout weight, and overall tone. Do NOT simply copy their literal colors; pull primary + accents from the logo. References inform the neutrals, radii, shadows, and typography pairing.`
+                ? `4. ${refs.length} style reference file(s) attached after the logo (${refs.map(r => r.name).join(', ')}). Read them as mood, typographic feel, color temperature, layout density, and overall tone. Let them shape neutrals, radii, shadows, typography pairing, and palette energy.`
                 : '',
-              '',
-              'Analyze the uploaded logo first (it is the first image). Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 documents and 16:9 slide decks. Precise hex values. Neutrals (text, light_bg, dark, border) should pair well with the logo and reflect the feel of any reference materials.',
+              body.feedback ? `5. Feedback on the previous proposal (HIGHEST priority — you MUST move noticeably from the previous output, not return a near-duplicate): "${body.feedback}".` : '',
+              ``,
+              `# How to build the palette`,
+              `- **Accents** (array of 4): derive from logo colors. If the logo has 4+ hues, pick four distinct ones. If fewer, create harmonic variants.`,
+              `- **Primary**: may match the logo's dominant hue OR shift to a complementary/analogous tone that reinforces the keywords. It doesn't have to equal \`accents[0]\`. For "bold"/"fun"/"energetic" keywords, consider a saturated primary. For "editorial"/"serious"/"minimal", consider a darker or more restrained primary.`,
+              `- **Neutrals** (text, light_bg, dark, dark_surface, border, text_muted): free to shape based on references + keywords. Don't default to the same navy+off-white every time. "Warm" keywords → warm neutrals (creams, taupes). "Cold/technical" → cool grays. "Dark"/"cinematic" → deep charcoal / near-black.`,
+              ``,
+              `# How to choose typography`,
+              `- Pick fonts that EXPRESS the keywords. You may name ANY Google Font family (it will be auto-imported on apply).`,
+              `  - "fun"/"playful" → display fonts: Bricolage Grotesque, Fraunces (variable), Space Grotesk, DM Serif Display`,
+              `  - "editorial" → serif heading + sans body: Fraunces / Instrument Serif / Playfair Display paired with Inter or DM Sans`,
+              `  - "technical"/"precise" → geometric sans: Inter, Manrope, DM Sans, JetBrains Mono`,
+              `  - "warm/human" → humanist sans: Figtree, Work Sans, Nunito Sans`,
+              `  - "bold/statement" → heavy display: Anton, Archivo Black, Bricolage Grotesque Bold`,
+              `- heading_font and body_font may be the same OR different (often more impactful when different).`,
+              ``,
+              `# Differentiation mandate`,
+              `If feedback is present, your proposal MUST visibly differ from the previous proposal — shift the primary hue meaningfully, try a different typographic personality, or re-tune neutrals. Do not return near-identical palettes across successive generations.`,
             ].filter(Boolean).join('\n');
 
             try {
-              const response = await client.messages.create({
-                model,
-                max_tokens: 2000,
-                tools: [TOOL_SCHEMA as unknown as Anthropic.Tool],
-                tool_choice: { type: 'tool', name: 'propose_brand_theme' },
-                messages: [{
-                  role: 'user',
-                  content: [
-                    { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-                    ...refBlocks,
-                    { type: 'text', text: userText },
-                  ],
-                }],
+              const biasesToUse = BIASES.slice(0, count);
+              const calls = biasesToUse.map(async bias => {
+                const biasedText = `${userText}\n\n# Variant direction\n${bias.nudge}`;
+                const response = await client.messages.create({
+                  model,
+                  max_tokens: 2000,
+                  tools: [TOOL_SCHEMA as unknown as Anthropic.Tool],
+                  tool_choice: { type: 'tool', name: 'propose_brand_theme' },
+                  messages: [{
+                    role: 'user',
+                    content: [
+                      { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+                      ...refBlocks,
+                      { type: 'text', text: biasedText },
+                    ],
+                  }],
+                });
+                const toolBlock = response.content.find(b => b.type === 'tool_use');
+                if (!toolBlock || toolBlock.type !== 'tool_use') {
+                  throw new Error('Claude did not return a structured proposal.');
+                }
+                return {
+                  direction: bias.label,
+                  proposal: toolBlock.input as ThemeProposal,
+                  usage: response.usage,
+                };
               });
-              const toolBlock = response.content.find(b => b.type === 'tool_use');
-              if (!toolBlock || toolBlock.type !== 'tool_use') {
-                return sendJson(res, 502, { error: 'Claude did not return a structured proposal.' });
+              const settled = await Promise.allSettled(calls);
+              const variants = settled
+                .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof calls[number]>>> => r.status === 'fulfilled')
+                .map(r => r.value);
+              if (variants.length === 0) {
+                const firstError = settled.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+                return sendJson(res, 502, {
+                  error: `Claude API error: ${firstError?.reason?.message ?? 'all variants failed'}`,
+                });
               }
               return sendJson(res, 200, {
-                proposal: toolBlock.input as ThemeProposal,
+                variants,
+                // backward-compat for older clients that expected a single `proposal`
+                proposal: variants[0].proposal,
                 model,
-                usage: response.usage,
                 referencesUsed: refs.map(r => r.name),
               });
             } catch (err) {
