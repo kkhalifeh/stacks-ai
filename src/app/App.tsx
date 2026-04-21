@@ -4,16 +4,20 @@ import type { LoadedStack } from './stacks';
 import { exportInfo1Merged } from './exportInfo1';
 import { Sidebar } from './components/Sidebar';
 import { Landing } from './Landing';
+import { BrandStudio } from './BrandStudio';
 
 type Route =
   | { view: 'landing' }
-  | { view: 'stack'; stackId: string };
+  | { view: 'stack'; stackId: string }
+  | { view: 'brand'; stackId: string };
 
 function readRouteFromUrl(): Route {
   if (typeof window === 'undefined') return { view: 'landing' };
   const params = new URLSearchParams(window.location.search);
   const stackId = params.get('stack');
+  const view = params.get('view');
   if (stackId && stacks.some(s => s.id === stackId)) {
+    if (view === 'brand') return { view: 'brand', stackId };
     return { view: 'stack', stackId };
   }
   return { view: 'landing' };
@@ -21,9 +25,12 @@ function readRouteFromUrl(): Route {
 
 function pushRoute(route: Route) {
   if (typeof window === 'undefined') return;
-  const url = route.view === 'landing'
-    ? `${window.location.pathname}`
-    : `${window.location.pathname}?stack=${encodeURIComponent(route.stackId)}`;
+  let url = window.location.pathname;
+  if (route.view === 'stack') {
+    url += `?stack=${encodeURIComponent(route.stackId)}`;
+  } else if (route.view === 'brand') {
+    url += `?stack=${encodeURIComponent(route.stackId)}&view=brand`;
+  }
   window.history.pushState({}, '', url);
 }
 
@@ -51,15 +58,30 @@ export default function App() {
   if (route.view === 'landing') {
     return <Landing onOpen={id => navigate({ view: 'stack', stackId: id })} />;
   }
-  return <StackViewer stackId={route.stackId} onBack={() => navigate({ view: 'landing' })} />;
+  if (route.view === 'brand') {
+    return (
+      <BrandStudio
+        stackId={route.stackId}
+        onBack={() => navigate({ view: 'stack', stackId: route.stackId })}
+      />
+    );
+  }
+  return (
+    <StackViewer
+      stackId={route.stackId}
+      onBack={() => navigate({ view: 'landing' })}
+      onOpenBrand={() => navigate({ view: 'brand', stackId: route.stackId })}
+    />
+  );
 }
 
 interface StackViewerProps {
   stackId: string;
   onBack: () => void;
+  onOpenBrand: () => void;
 }
 
-function StackViewer({ stackId, onBack }: StackViewerProps) {
+function StackViewer({ stackId, onBack, onOpenBrand }: StackViewerProps) {
   const activeStack: LoadedStack | undefined = useMemo(
     () => stacks.find(s => s.id === stackId),
     [stackId],
@@ -135,6 +157,7 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
         activePdf={activePdf}
         onPdfPreview={setActivePdf}
         onBack={onBack}
+        onOpenBrand={onOpenBrand}
       />
 
       <main
