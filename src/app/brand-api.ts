@@ -40,6 +40,15 @@ export interface ThemeMeta {
   createdAt?: string;
 }
 
+export interface BrandSummary {
+  id: string;
+  name: string;
+  subtitle?: string;
+  logo: string | null;
+  activeThemeId: string | null;
+  themeCount: number;
+}
+
 export interface TenantBrand {
   name: string;
   subtitle: string;
@@ -55,6 +64,11 @@ export interface BrandReference {
   mediaType: string;
 }
 
+export interface ThemeVariant {
+  direction: string;
+  proposal: ThemeProposal;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -63,54 +77,15 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-export async function getTenant(): Promise<TenantBrand> {
-  const res = await fetch('/__api/brand');
+// ─── Collection-level (brands) ──────────────────────────────────
+
+export async function listBrands(): Promise<{ brands: BrandSummary[] }> {
+  const res = await fetch('/__api/brands');
   return handle(res);
 }
 
-export async function updateTenant(patch: { name?: string; subtitle?: string }): Promise<TenantBrand> {
-  const res = await fetch('/__api/brand', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-  return handle(res);
-}
-
-export async function uploadTenantLogo(file: File): Promise<{ name: string; size: number }> {
-  const res = await fetch('/__api/brand/logo', {
-    method: 'POST',
-    headers: { 'Content-Type': file.type || 'image/png' },
-    body: file,
-  });
-  return handle(res);
-}
-
-export interface ThemeVariant {
-  direction: string;
-  proposal: ThemeProposal;
-}
-
-export async function generateTenantTheme(input: {
-  name: string;
-  keywords?: string;
-  feedback?: string;
-  count?: number;
-}): Promise<{ variants: ThemeVariant[]; proposal: ThemeProposal; model: string; referencesUsed?: string[] }> {
-  const res = await fetch('/__api/brand/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ count: 3, ...input }),
-  });
-  return handle(res);
-}
-
-export async function saveTheme(input: {
-  name: string;
-  proposal: ThemeProposal;
-  setDefault?: boolean;
-}): Promise<{ id: string; name: string }> {
-  const res = await fetch('/__api/brand/themes', {
+export async function createBrand(input: { id: string; name: string }): Promise<{ id: string; name: string }> {
+  const res = await fetch('/__api/brands', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -118,23 +93,87 @@ export async function saveTheme(input: {
   return handle(res);
 }
 
-export async function setDefaultTheme(id: string): Promise<{ activeThemeId: string }> {
-  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}/default`, {
+export async function deleteBrand(id: string): Promise<{ id: string; deleted: true }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return handle(res);
+}
+
+// ─── Per-brand: metadata ────────────────────────────────────────
+
+export async function getBrand(id: string): Promise<TenantBrand> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}`);
+  return handle(res);
+}
+
+export async function updateBrand(id: string, patch: { name?: string; subtitle?: string }): Promise<TenantBrand> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handle(res);
+}
+
+export async function uploadBrandLogo(id: string, file: File): Promise<{ name: string; size: number }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}/logo`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'image/png' },
+    body: file,
+  });
+  return handle(res);
+}
+
+export function brandLogoUrl(id: string, cacheBust?: number): string {
+  const q = cacheBust ? `?t=${cacheBust}` : '';
+  return `/__api/brands/${encodeURIComponent(id)}/logo${q}`;
+}
+
+// ─── Per-brand: generation + themes ─────────────────────────────
+
+export async function generateBrandTheme(
+  brandId: string,
+  input: { name: string; keywords?: string; feedback?: string; count?: number },
+): Promise<{ variants: ThemeVariant[]; proposal: ThemeProposal; model: string; referencesUsed?: string[] }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ count: 3, ...input }),
+  });
+  return handle(res);
+}
+
+export async function saveBrandTheme(
+  brandId: string,
+  input: { name: string; proposal: ThemeProposal; setDefault?: boolean },
+): Promise<{ id: string; name: string }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/themes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handle(res);
+}
+
+export async function setDefaultBrandTheme(brandId: string, themeId: string): Promise<{ activeThemeId: string }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/themes/${encodeURIComponent(themeId)}/default`, {
     method: 'POST',
   });
   return handle(res);
 }
 
-export async function deleteTheme(id: string): Promise<{ deleted: string }> {
-  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export async function deleteBrandTheme(brandId: string, themeId: string): Promise<{ deleted: string }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/themes/${encodeURIComponent(themeId)}`, {
+    method: 'DELETE',
+  });
   return handle(res);
 }
 
-export async function updateThemeFonts(
-  id: string,
+export async function updateBrandThemeFonts(
+  brandId: string,
+  themeId: string,
   fonts: { heading_font?: string; body_font?: string },
 ): Promise<{ id: string; heading_font: string; body_font: string }> {
-  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}/fonts`, {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/themes/${encodeURIComponent(themeId)}/fonts`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fonts),
@@ -142,19 +181,16 @@ export async function updateThemeFonts(
   return handle(res);
 }
 
-export function tenantLogoUrl(cacheBust?: number): string {
-  const q = cacheBust ? `?t=${cacheBust}` : '';
-  return `/__api/brand/logo${q}`;
-}
+// ─── Per-brand: references ──────────────────────────────────────
 
-export async function listReferences(): Promise<{ references: BrandReference[] }> {
-  const res = await fetch('/__api/brand/references');
+export async function listBrandReferences(brandId: string): Promise<{ references: BrandReference[] }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/references`);
   return handle(res);
 }
 
-export async function uploadReference(file: File): Promise<{ name: string; size: number }> {
+export async function uploadBrandReference(brandId: string, file: File): Promise<{ name: string; size: number }> {
   const contentType = file.type || guessContentType(file.name);
-  const res = await fetch(`/__api/brand/references/${encodeURIComponent(file.name)}`, {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/references/${encodeURIComponent(file.name)}`, {
     method: 'POST',
     headers: { 'Content-Type': contentType },
     body: file,
@@ -162,8 +198,8 @@ export async function uploadReference(file: File): Promise<{ name: string; size:
   return handle(res);
 }
 
-export async function deleteReference(name: string): Promise<{ deleted: string }> {
-  const res = await fetch(`/__api/brand/references/${encodeURIComponent(name)}`, { method: 'DELETE' });
+export async function deleteBrandReference(brandId: string, name: string): Promise<{ deleted: string }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/references/${encodeURIComponent(name)}`, { method: 'DELETE' });
   return handle(res);
 }
 
@@ -176,6 +212,8 @@ function guessContentType(name: string): string {
   if (ext === 'pdf') return 'application/pdf';
   return 'application/octet-stream';
 }
+
+// ─── CSS helpers ────────────────────────────────────────────────
 
 export function proposalToCssVars(p: ThemeProposal): string {
   const a = p.palette.accents;
@@ -213,21 +251,16 @@ export function proposalToCssVars(p: ThemeProposal): string {
   `.trim();
 }
 
-/** Extract the :root CSS variables from a theme file (string) so we can scope them for preview. */
 export function extractRootVars(css: string): string {
   const match = css.match(/:root\s*\{([\s\S]*?)\}/);
   return match ? match[1].trim() : '';
 }
 
-/** Pull out the --font-heading / --font-body values from a theme CSS string. */
 export function extractThemeFonts(css: string | undefined): { heading?: string; body?: string } {
   if (!css) return {};
   const h = css.match(/--font-heading:\s*([^;]+);/);
   const b = css.match(/--font-body:\s*([^;]+);/);
-  return {
-    heading: h?.[1]?.trim(),
-    body: b?.[1]?.trim(),
-  };
+  return { heading: h?.[1]?.trim(), body: b?.[1]?.trim() };
 }
 
 const SYSTEM_FONT_TOKENS = new Set([
@@ -253,7 +286,6 @@ export function googleFontsForProposal(p: ThemeProposal): string[] {
   return Array.from(new Set(out));
 }
 
-/** Ensure a <link rel="stylesheet"> for the given Google Font families is present in <head>. Idempotent. */
 export function ensureGoogleFonts(families: string[]): void {
   if (typeof document === 'undefined' || families.length === 0) return;
   const params = families
@@ -269,3 +301,21 @@ export function ensureGoogleFonts(families: string[]): void {
   link.setAttribute(key, href);
   document.head.appendChild(link);
 }
+
+// ─── Legacy aliases (for code still in flight) ───────────────────
+// These retain the old function names used by BrandStudio today. They
+// default to the first brand. Will be removed once BrandStudio is brand-aware.
+const LEGACY_BRAND_ID = 'kinz';
+
+export const getTenant = (id?: string) => getBrand(id ?? LEGACY_BRAND_ID);
+export const updateTenant = (patch: { name?: string; subtitle?: string }) => updateBrand(LEGACY_BRAND_ID, patch);
+export const uploadTenantLogo = (file: File) => uploadBrandLogo(LEGACY_BRAND_ID, file);
+export const generateTenantTheme = (input: Parameters<typeof generateBrandTheme>[1]) => generateBrandTheme(LEGACY_BRAND_ID, input);
+export const saveTheme = (input: Parameters<typeof saveBrandTheme>[1]) => saveBrandTheme(LEGACY_BRAND_ID, input);
+export const setDefaultTheme = (id: string) => setDefaultBrandTheme(LEGACY_BRAND_ID, id);
+export const deleteTheme = (id: string) => deleteBrandTheme(LEGACY_BRAND_ID, id);
+export const updateThemeFonts = (id: string, fonts: Parameters<typeof updateBrandThemeFonts>[2]) => updateBrandThemeFonts(LEGACY_BRAND_ID, id, fonts);
+export const tenantLogoUrl = (cb?: number) => brandLogoUrl(LEGACY_BRAND_ID, cb);
+export const listReferences = () => listBrandReferences(LEGACY_BRAND_ID);
+export const uploadReference = (file: File) => uploadBrandReference(LEGACY_BRAND_ID, file);
+export const deleteReference = (name: string) => deleteBrandReference(LEGACY_BRAND_ID, name);

@@ -48,6 +48,7 @@ export interface LoadedStack {
   name: string;
   subtitle?: string;
   format: StackFormat;
+  brandId: string;
   logoUrl?: string;
   themeCss?: string;
   binders: LoadedBinder[];
@@ -61,6 +62,7 @@ interface RawManifest {
   name: string;
   subtitle?: string;
   format: StackFormat;
+  brandId?: string;
   theme?: string;
   logo?: string;
   binders?: Array<RawBinder>;
@@ -82,16 +84,17 @@ const pageModules = import.meta.glob<Record<string, FC>>('/stacks/*/pages/**/*.t
 const themeCssFiles = import.meta.glob<string>('/stacks/*/theme/*.css', { eager: true, query: '?raw', import: 'default' });
 const assetUrls = import.meta.glob<string>('/stacks/*/assets/**/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
 
-// ─── TENANT BRAND ──────────────────────────────────────────────
-// Tenant-level brand lives at /brand/. Multiple themes coexist under
-// /brand/themes/<id>/. The tenant.json's activeThemeId points at the default.
+// ─── BRANDS ──────────────────────────────────────────────
+// Multi-brand tenancy. Each brand is a self-contained folder under `/brands/<id>/`
+// with its own logo, themes, templates, references. One "tenant" = the app
+// deployment; can hold multiple brands. Stacks reference a brand by id.
 
-interface TenantManifest {
+interface BrandManifest {
+  id?: string;
   name: string;
   subtitle?: string;
   logo?: string;
   activeThemeId?: string;
-  theme?: string; // legacy: pre-multi-theme single pointer
 }
 
 interface ThemeMetaRaw {
@@ -101,13 +104,13 @@ interface ThemeMetaRaw {
   createdAt?: string;
 }
 
-const tenantManifestRaw = import.meta.glob<TenantManifest>('/brand/tenant.json', { eager: true, import: 'default' });
-const tenantAssets = import.meta.glob<string>('/brand/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
-const tenantThemeCssFiles = import.meta.glob<string>('/brand/themes/*/theme.css', { eager: true, query: '?raw', import: 'default' });
-const tenantThemeMetas = import.meta.glob<ThemeMetaRaw>('/brand/themes/*/meta.json', { eager: true, import: 'default' });
-const legacyTenantTheme = import.meta.glob<string>('/brand/theme.css', { eager: true, query: '?raw', import: 'default' });
+const brandManifests = import.meta.glob<BrandManifest>('/brands/*/brand.json', { eager: true, import: 'default' });
+const brandAssets = import.meta.glob<string>('/brands/*/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
+const brandThemeCssFiles = import.meta.glob<string>('/brands/*/themes/*/theme.css', { eager: true, query: '?raw', import: 'default' });
+const brandThemeMetas = import.meta.glob<ThemeMetaRaw>('/brands/*/themes/*/meta.json', { eager: true, import: 'default' });
+const brandTemplateModules = import.meta.glob<Record<string, FC>>('/brands/*/templates/*/pages/**/*.tsx', { eager: true });
 
-export interface TenantThemeInfo {
+export interface BrandThemeInfo {
   id: string;
   name: string;
   description?: string;
@@ -115,98 +118,107 @@ export interface TenantThemeInfo {
   themeCss: string;
 }
 
-export interface LoadedTenant {
-  name: string;
-  subtitle?: string;
-  logoUrl?: string;
-  activeThemeId?: string;
-  themes: TenantThemeInfo[];
-  /** Effective CSS for the active theme (or legacy theme.css as a fallback). */
-  themeCss?: string;
-}
-
-function themeIdFromPath(p: string): string | undefined {
-  const m = p.match(/^\/brand\/themes\/([^/]+)\//);
-  return m?.[1];
-}
-
-function loadTenantThemes(): TenantThemeInfo[] {
-  const byId = new Map<string, TenantThemeInfo>();
-  for (const [p, css] of Object.entries(tenantThemeCssFiles)) {
-    const id = themeIdFromPath(p);
-    if (!id) continue;
-    byId.set(id, { id, name: id, themeCss: css });
-  }
-  for (const [p, meta] of Object.entries(tenantThemeMetas)) {
-    const id = themeIdFromPath(p);
-    if (!id) continue;
-    const existing = byId.get(id);
-    if (!existing) continue;
-    if (meta.name) existing.name = meta.name;
-    if (meta.description) existing.description = meta.description;
-    if (meta.createdAt) existing.createdAt = meta.createdAt;
-  }
-  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function loadTenant(): LoadedTenant | undefined {
-  const raw = tenantManifestRaw['/brand/tenant.json'];
-  if (!raw) return undefined;
-  const themes = loadTenantThemes();
-  const active = raw.activeThemeId
-    ? themes.find(t => t.id === raw.activeThemeId)
-    : themes[0];
-  const legacyCss = legacyTenantTheme['/brand/theme.css'];
-  return {
-    name: raw.name,
-    subtitle: raw.subtitle,
-    logoUrl: raw.logo ? tenantAssets[`/brand/${raw.logo}`] : undefined,
-    activeThemeId: active?.id,
-    themes,
-    themeCss: active?.themeCss ?? legacyCss,
-  };
-}
-
-export const tenant: LoadedTenant | undefined = loadTenant();
-
-// ─── TENANT TEMPLATES ──────────────────────────────────────────
-// Branded starter templates at /brand/templates/<format>/pages/**/*.tsx.
-// Used both as the default starter when creating a new stack AND as the
-// live preview in Brand Studio.
-
-const tenantTemplateModules = import.meta.glob<Record<string, FC>>(
-  '/brand/templates/*/pages/**/*.tsx',
-  { eager: true },
-);
-
-export interface TenantTemplateBundle {
+export interface BrandTemplateBundle {
   format: StackFormat;
   components: Record<string, FC>;
 }
 
-function tenantFormatFromPath(p: string): StackFormat | undefined {
-  const m = p.match(/^\/brand\/templates\/([^/]+)\//);
+export interface LoadedBrand {
+  id: string;
+  name: string;
+  subtitle?: string;
+  logoUrl?: string;
+  activeThemeId?: string;
+  themes: BrandThemeInfo[];
+  /** Effective CSS for the active theme of this brand. */
+  themeCss?: string;
+  /** Brand-specific tenant templates keyed by format. */
+  templates: Partial<Record<StackFormat, BrandTemplateBundle>>;
+}
+
+function brandIdFromPath(p: string, kind: 'manifest' | 'asset' | 'theme' | 'template'): string | undefined {
+  const m = p.match(/^\/brands\/([^/]+)\//);
+  return m?.[1];
+}
+
+function themeIdFromPath(p: string): { brandId: string; themeId: string } | undefined {
+  const m = p.match(/^\/brands\/([^/]+)\/themes\/([^/]+)\//);
   if (!m) return undefined;
-  const f = m[1];
-  if (f === 'a4' || f === 'slide-16x9') return f;
+  return { brandId: m[1], themeId: m[2] };
+}
+
+function templateFormatFromPath(p: string): { brandId: string; format: StackFormat } | undefined {
+  const m = p.match(/^\/brands\/([^/]+)\/templates\/([^/]+)\//);
+  if (!m) return undefined;
+  const f = m[2];
+  if (f === 'a4' || f === 'slide-16x9') return { brandId: m[1], format: f };
   return undefined;
 }
 
-function loadTenantTemplates(): Partial<Record<StackFormat, TenantTemplateBundle>> {
-  const bundles: Partial<Record<StackFormat, TenantTemplateBundle>> = {};
-  for (const [modPath, mod] of Object.entries(tenantTemplateModules)) {
-    const format = tenantFormatFromPath(modPath);
-    if (!format) continue;
-    const entry = bundles[format] ?? { format, components: {} };
-    for (const [name, comp] of Object.entries(mod)) {
-      if (typeof comp === 'function') entry.components[name] = comp;
+function loadBrands(): LoadedBrand[] {
+  const out: LoadedBrand[] = [];
+  for (const [p, raw] of Object.entries(brandManifests)) {
+    const id = brandIdFromPath(p, 'manifest');
+    if (!id) continue;
+
+    const themes: BrandThemeInfo[] = [];
+    for (const [tp, css] of Object.entries(brandThemeCssFiles)) {
+      const match = themeIdFromPath(tp);
+      if (!match || match.brandId !== id) continue;
+      themes.push({ id: match.themeId, name: match.themeId, themeCss: css });
     }
-    bundles[format] = entry;
+    for (const [tp, meta] of Object.entries(brandThemeMetas)) {
+      const match = themeIdFromPath(tp);
+      if (!match || match.brandId !== id) continue;
+      const existing = themes.find(t => t.id === match.themeId);
+      if (!existing) continue;
+      if (meta.name) existing.name = meta.name;
+      if (meta.description) existing.description = meta.description;
+      if (meta.createdAt) existing.createdAt = meta.createdAt;
+    }
+    themes.sort((a, b) => a.name.localeCompare(b.name));
+
+    const activeId = raw.activeThemeId ?? themes[0]?.id;
+    const active = themes.find(t => t.id === activeId);
+
+    const templates: Partial<Record<StackFormat, BrandTemplateBundle>> = {};
+    for (const [tp, mod] of Object.entries(brandTemplateModules)) {
+      const match = templateFormatFromPath(tp);
+      if (!match || match.brandId !== id) continue;
+      const entry = templates[match.format] ?? { format: match.format, components: {} };
+      for (const [name, comp] of Object.entries(mod)) {
+        if (typeof comp === 'function') entry.components[name] = comp;
+      }
+      templates[match.format] = entry;
+    }
+
+    out.push({
+      id,
+      name: raw.name,
+      subtitle: raw.subtitle,
+      logoUrl: raw.logo ? brandAssets[`/brands/${id}/${raw.logo}`] : undefined,
+      activeThemeId: active?.id,
+      themes,
+      themeCss: active?.themeCss,
+      templates,
+    });
   }
-  return bundles;
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
 }
 
-export const tenantTemplates: Partial<Record<StackFormat, TenantTemplateBundle>> = loadTenantTemplates();
+export const brands: LoadedBrand[] = loadBrands();
+
+export function getBrand(id: string | undefined): LoadedBrand | undefined {
+  if (!id) return undefined;
+  return brands.find(b => b.id === id);
+}
+
+// Legacy aliases — kept so existing components keep working while we migrate.
+export const tenant: LoadedBrand | undefined = brands[0];
+export type TenantThemeInfo = BrandThemeInfo;
+export type TenantTemplateBundle = BrandTemplateBundle;
+export const tenantTemplates: Partial<Record<StackFormat, BrandTemplateBundle>> = brands[0]?.templates ?? {};
 
 function stackIdFromPath(path: string): string {
   const match = path.match(/^\/stacks\/([^/]+)\//);
@@ -260,6 +272,11 @@ function normalize(raw: RawManifest): StackManifest {
   };
 }
 
+function brandIdForStack(raw: RawManifest): string {
+  // Explicit brandId wins. Otherwise, fall back to the first brand (typical in single-brand deployments).
+  return raw.brandId ?? brands[0]?.id ?? 'default';
+}
+
 function loadOne(raw: RawManifest): LoadedStack {
   const manifest = normalize(raw);
   const registry = buildRegistry(manifest.id);
@@ -281,7 +298,9 @@ function loadOne(raw: RawManifest): LoadedStack {
     console.warn(`[stacks] Missing component exports:\n  ${missing.join('\n  ')}`);
   }
 
-  // Resolve effective theme + logo: stack-level overrides win, tenant is the fallback.
+  // Resolve effective theme + logo: stack-level overrides win, brand is the fallback.
+  const brandId = brandIdForStack(raw);
+  const brand = getBrand(brandId);
   const stackTheme = themeForStack(manifest.id, manifest.theme);
   const stackLogo = logoUrlForStack(manifest.id, manifest.logo);
 
@@ -290,8 +309,9 @@ function loadOne(raw: RawManifest): LoadedStack {
     name: manifest.name,
     subtitle: manifest.subtitle,
     format: manifest.format,
-    logoUrl: stackLogo ?? tenant?.logoUrl,
-    themeCss: stackTheme ?? tenant?.themeCss,
+    brandId,
+    logoUrl: stackLogo ?? brand?.logoUrl,
+    themeCss: stackTheme ?? brand?.themeCss,
     binders,
     componentRegistry: registry,
     dir: `/stacks/${manifest.id}`,

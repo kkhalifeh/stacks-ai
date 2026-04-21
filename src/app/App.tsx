@@ -5,31 +5,38 @@ import { exportInfo1Merged } from './exportInfo1';
 import { Sidebar } from './components/Sidebar';
 import { Landing } from './Landing';
 import { BrandStudio } from './BrandStudio';
+import { BrandsLanding } from './BrandsLanding';
+import { brands } from './stacks';
 
 type Route =
-  | { view: 'landing' }
-  | { view: 'brand' }
-  | { view: 'stack'; stackId: string };
+  | { view: 'brands' }
+  | { view: 'landing'; brandId: string }
+  | { view: 'brand'; brandId: string }
+  | { view: 'stack'; brandId: string; stackId: string };
 
 function readRouteFromUrl(): Route {
-  if (typeof window === 'undefined') return { view: 'landing' };
+  if (typeof window === 'undefined') return { view: 'brands' };
   const params = new URLSearchParams(window.location.search);
+  const brandId = params.get('brand');
   const view = params.get('view');
-  if (view === 'brand') return { view: 'brand' };
   const stackId = params.get('stack');
+  if (!brandId) return { view: 'brands' };
+  if (view === 'brand') return { view: 'brand', brandId };
   if (stackId && stacks.some(s => s.id === stackId)) {
-    return { view: 'stack', stackId };
+    return { view: 'stack', brandId, stackId };
   }
-  return { view: 'landing' };
+  return { view: 'landing', brandId };
 }
 
 function pushRoute(route: Route) {
   if (typeof window === 'undefined') return;
   let url = window.location.pathname;
-  if (route.view === 'stack') {
-    url += `?stack=${encodeURIComponent(route.stackId)}`;
+  if (route.view === 'landing') {
+    url += `?brand=${encodeURIComponent(route.brandId)}`;
   } else if (route.view === 'brand') {
-    url += `?view=brand`;
+    url += `?brand=${encodeURIComponent(route.brandId)}&view=brand`;
+  } else if (route.view === 'stack') {
+    url += `?brand=${encodeURIComponent(route.brandId)}&stack=${encodeURIComponent(route.stackId)}`;
   }
   window.history.pushState({}, '', url);
 }
@@ -49,27 +56,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (route.view === 'landing') {
+    if (route.view === 'brands' || route.view === 'landing') {
       applyStackTheme(undefined);
       applyPrintPageSize(undefined);
     }
   }, [route]);
 
+  if (route.view === 'brands') {
+    return <BrandsLanding onOpenBrand={id => navigate({ view: 'landing', brandId: id })} />;
+  }
   if (route.view === 'landing') {
     return (
       <Landing
-        onOpen={id => navigate({ view: 'stack', stackId: id })}
-        onOpenBrand={() => navigate({ view: 'brand' })}
+        brandId={route.brandId}
+        onOpen={id => navigate({ view: 'stack', brandId: route.brandId, stackId: id })}
+        onOpenBrand={() => navigate({ view: 'brand', brandId: route.brandId })}
+        onBack={() => navigate({ view: 'brands' })}
       />
     );
   }
   if (route.view === 'brand') {
-    return <BrandStudio onBack={() => navigate({ view: 'landing' })} />;
+    return <BrandStudio brandId={route.brandId} onBack={() => navigate({ view: 'landing', brandId: route.brandId })} />;
   }
   return (
     <StackViewer
       stackId={route.stackId}
-      onBack={() => navigate({ view: 'landing' })}
+      onBack={() => navigate({ view: 'landing', brandId: route.brandId })}
     />
   );
 }

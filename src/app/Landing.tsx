@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Plus, Sparkles } from 'lucide-react';
-import { stacks, tenant } from './stacks';
+import { ChevronLeft, Plus, Sparkles } from 'lucide-react';
+import { stacks, getBrand } from './stacks';
 import { StackCard } from './components/StackCard';
 import { NewStackModal } from './components/NewStackModal';
 
 interface LandingProps {
+  brandId: string;
   onOpen: (stackId: string) => void;
   onOpenBrand: () => void;
+  onBack: () => void;
 }
 
 function scopeThemeCss(css: string | undefined, scope: string): string {
@@ -14,16 +16,18 @@ function scopeThemeCss(css: string | undefined, scope: string): string {
   return css.replace(/:root\b/g, `.${scope}`);
 }
 
-export function Landing({ onOpen, onOpenBrand }: LandingProps) {
+export function Landing({ brandId, onOpen, onOpenBrand, onBack }: LandingProps) {
   const [showModal, setShowModal] = useState(false);
+  const brand = getBrand(brandId);
+  const brandStacks = useMemo(() => stacks.filter(s => s.brandId === brandId), [brandId]);
 
   const scopedThemes = useMemo(
-    () => stacks.map(s => scopeThemeCss(s.themeCss, `theme-${s.id}`)).join('\n'),
-    [],
+    () => brandStacks.map(s => scopeThemeCss(s.themeCss, `theme-${s.id}`)).join('\n'),
+    [brandStacks],
   );
 
   async function handleCreated(id: string) {
-    window.location.href = `/?stack=${encodeURIComponent(id)}`;
+    window.location.href = `/?brand=${encodeURIComponent(brandId)}&stack=${encodeURIComponent(id)}`;
   }
 
   return (
@@ -33,12 +37,22 @@ export function Landing({ onOpen, onOpenBrand }: LandingProps) {
     >
       <style>{scopedThemes}</style>
 
-      <header className="max-w-[1280px] mx-auto px-10 pt-14 pb-10">
+      <header className="max-w-[1280px] mx-auto px-10 pt-10 pb-10">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] mb-5 transition-colors"
+          style={{ color: 'var(--lx-text-subtle)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
+        >
+          <ChevronLeft className="w-3 h-3" />
+          All brands
+        </button>
         <div className="flex items-end justify-between gap-6">
           <div className="flex items-center gap-4">
-            {tenant?.logoUrl && (
+            {brand?.logoUrl && (
               <img
-                src={tenant.logoUrl}
+                src={brand.logoUrl}
                 alt=""
                 className="w-10 h-10 object-contain"
                 style={{ borderRadius: 'var(--lx-radius-sm)' }}
@@ -49,13 +63,13 @@ export function Landing({ onOpen, onOpenBrand }: LandingProps) {
                 className="text-[22px] font-semibold tracking-tight"
                 style={{ color: 'var(--lx-text)' }}
               >
-                {tenant?.name ?? 'Document Builder'}
+                {brand?.name ?? brandId}
               </h1>
               <p
                 className="text-[13px] mt-1"
                 style={{ color: 'var(--lx-text-muted)' }}
               >
-                {stacks.length} stack{stacks.length === 1 ? '' : 's'}
+                {brandStacks.length} stack{brandStacks.length === 1 ? '' : 's'}
               </p>
             </div>
           </div>
@@ -98,7 +112,7 @@ export function Landing({ onOpen, onOpenBrand }: LandingProps) {
       </header>
 
       <main className="max-w-[1280px] mx-auto px-10 pb-20">
-        {stacks.length === 0 ? (
+        {brandStacks.length === 0 ? (
           <div
             className="rounded-[14px] p-14 text-center"
             style={{
@@ -120,7 +134,7 @@ export function Landing({ onOpen, onOpenBrand }: LandingProps) {
           </div>
         ) : (
           <div className="flex flex-wrap gap-6">
-            {stacks.map(stack => (
+            {brandStacks.map(stack => (
               <StackCard
                 key={stack.id}
                 stack={stack}
@@ -158,6 +172,7 @@ export function Landing({ onOpen, onOpenBrand }: LandingProps) {
 
       {showModal && (
         <NewStackModal
+          brandId={brandId}
           existingIds={stacks.map(s => s.id)}
           onClose={() => setShowModal(false)}
           onCreated={handleCreated}

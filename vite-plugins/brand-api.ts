@@ -4,11 +4,12 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 
-const BRAND_DIR = 'brand';
+const BRANDS_DIR = 'brands';
 const THEMES_SUBDIR = 'themes';
 const REFERENCES_SUBDIR = 'references';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const BRAND_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const THEME_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const REFERENCE_FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ \-()]{0,200}$/;
 
@@ -347,27 +348,99 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
     name: 'brand-api',
     configureServer(server) {
       const root = server.config.root;
-      const brandDir = path.join(root, BRAND_DIR);
-      const manifestPath = path.join(brandDir, 'tenant.json');
-      const themesDir = path.join(brandDir, THEMES_SUBDIR);
-
-      const readManifest = async () => {
-        if (!(await exists(manifestPath))) {
-          return { name: 'My Brand', logo: 'logo.png' } as Record<string, unknown>;
-        }
-        return JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-      };
-      const writeManifest = async (m: unknown) =>
-        fs.writeFile(manifestPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
+      const brandsRoot = path.join(root, BRANDS_DIR);
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? '';
-        if (!url.startsWith('/__api/brand')) return next();
+        if (!url.startsWith('/__api/brands')) return next();
 
         try {
           const [pathOnly] = url.split('?');
           const method = req.method ?? 'GET';
-          const rest = pathOnly.replace(/^\/__api\/brand\/?/, '').replace(/^\/+/, '');
+
+          // Collection-level: /__api/brands
+          if (pathOnly === '/__api/brands' && method === 'GET') {
+            await fs.mkdir(brandsRoot, { recursive: true });
+            const entries = await fs.readdir(brandsRoot, { withFileTypes: true });
+            const out: Array<{ id: string; name: string; subtitle?: string; logo: string | null; activeThemeId: string | null; themeCount: number }> = [];
+            for (const e of entries) {
+              if (!e.isDirectory()) continue;
+              const bDir = path.join(brandsRoot, e.name);
+              const mPath = path.join(bDir, 'brand.json');
+              if (!(await exists(mPath))) continue;
+              let manifest: Record<string, unknown> = {};
+              try { manifest = JSON.parse(await fs.readFile(mPath, 'utf8')); } catch { /* skip */ }
+              const logo = await findLogoFile(bDir);
+              const themes = await readThemesDir(bDir);
+              out.push({
+                id: e.name,
+                name: (manifest.name as string) ?? e.name,
+                subtitle: manifest.subtitle as string | undefined,
+                logo: logo?.name ?? null,
+                activeThemeId: (manifest.activeThemeId as string | null) ?? null,
+                themeCount: themes.length,
+              });
+            }
+            out.sort((a, b) => a.name.localeCompare(b.name));
+            return sendJson(res, 200, { brands: out });
+          }
+
+          if (pathOnly === '/__api/brands' && method === 'POST') {
+            let body: { id: string; name: string };
+            try { body = await readJsonBody(req); }
+            catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+            if (!body.id || !BRAND_ID_RE.test(body.id)) {
+              return sendJson(res, 400, { error: 'id must match ^[a-z0-9][a-z0-9-]{0,63}$' });
+            }
+            if (!body.name || body.name.trim().length === 0) {
+              return sendJson(res, 400, { error: 'name is required' });
+            }
+            const bDir = path.join(brandsRoot, body.id);
+            if (await exists(bDir)) {
+              return sendJson(res, 409, { error: `Brand '${body.id}' already exists` });
+            }
+            await fs.mkdir(bDir, { recursive: true });
+            await fs.mkdir(path.join(bDir, THEMES_SUBDIR), { recursive: true });
+            await fs.mkdir(path.join(bDir, REFERENCES_SUBDIR), { recursive: true });
+            await fs.mkdir(path.join(bDir, 'templates'), { recursive: true });
+            await fs.writeFile(
+              path.join(bDir, 'brand.json'),
+              JSON.stringify({ id: body.id, name: body.name.trim(), subtitle: '', logo: null, activeThemeId: null }, null, 2) + '\n',
+              'utf8',
+            );
+            return sendJson(res, 201, { id: body.id, name: body.name.trim() });
+          }
+
+          // Per-brand routes: /__api/brands/:brandId/...
+          const brandMatch = pathOnly.match(/^\/__api\/brands\/([^/]+)(?:\/(.*))?$/);
+          if (!brandMatch) return next();
+
+          const brandId = decodeURIComponent(brandMatch[1]);
+          const rest = (brandMatch[2] ?? '').replace(/^\/+/, '');
+
+          if (!BRAND_ID_RE.test(brandId)) {
+            return sendJson(res, 400, { error: 'Invalid brand id' });
+          }
+
+          const brandDir = path.join(brandsRoot, brandId);
+          const manifestPath = path.join(brandDir, 'brand.json');
+          const themesDir = path.join(brandDir, THEMES_SUBDIR);
+
+          const readManifest = async () => {
+            if (!(await exists(manifestPath))) {
+              return { id: brandId, name: brandId, logo: null } as Record<string, unknown>;
+            }
+            return JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+          };
+          const writeManifest = async (m: unknown) =>
+            fs.writeFile(manifestPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
+
+          // DELETE /brands/:brandId
+          if (!rest && method === 'DELETE') {
+            if (!(await exists(brandDir))) return sendJson(res, 404, { error: 'Brand not found' });
+            await fs.rm(brandDir, { recursive: true, force: true });
+            return sendJson(res, 200, { id: brandId, deleted: true });
+          }
 
           // GET /__api/brand — tenant metadata + themes list
           if (!rest && method === 'GET') {

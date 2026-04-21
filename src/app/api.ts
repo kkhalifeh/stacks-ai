@@ -2,8 +2,10 @@ export interface CreateStackInput {
   id: string;
   name: string;
   template: 'a4' | 'slide-16x9';
-  /** Optional: tenant theme id to snapshot into the new stack. If omitted, stack inherits active tenant theme. */
+  /** Optional: brand theme id to snapshot into the new stack. If omitted, stack inherits active brand theme. */
   themeId?: string;
+  /** Brand that owns this stack. Defaults server-side to the first brand. */
+  brandId?: string;
 }
 
 export interface KbFile {

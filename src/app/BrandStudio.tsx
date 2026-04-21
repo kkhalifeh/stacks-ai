@@ -30,6 +30,7 @@ import { SlideTitleSample } from './preview/SlideTitleSample';
 import { SlideContentSample } from './preview/SlideContentSample';
 
 interface BrandStudioProps {
+  brandId?: string;
   onBack: () => void;
 }
 
@@ -53,7 +54,7 @@ const PREVIEW_SCALE_A4 = 0.5;
 const PREVIEW_SCALE_SLIDE = 0.45;
 const PREVIEW_SCOPE = 'brand-preview-tenant';
 
-export function BrandStudio({ onBack }: BrandStudioProps) {
+export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
   const [tenantData, setTenantData] = useState<TenantBrand | null>(null);
   const [name, setName] = useState(initialTenant?.name ?? '');
   const [keywords, setKeywords] = useState('');

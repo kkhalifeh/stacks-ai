@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Monitor, X } from 'lucide-react';
 import { createStack, slugify } from '../api';
-import { tenant } from '../stacks';
+import { getBrand } from '../stacks';
 import { LoadingOverlay } from './LoadingOverlay';
 
 interface NewStackModalProps {
+  brandId: string;
   existingIds: string[];
   onClose: () => void;
   onCreated: (id: string) => void;
@@ -12,7 +13,7 @@ interface NewStackModalProps {
 
 type Phase = 'idle' | 'creating' | 'opening';
 
-export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModalProps) {
+export function NewStackModal({ brandId, existingIds, onClose, onCreated }: NewStackModalProps) {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [idTouched, setIdTouched] = useState(false);
@@ -21,7 +22,8 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const availableThemes = tenant?.themes ?? [];
+  const brand = getBrand(brandId);
+  const availableThemes = brand?.themes ?? [];
 
   useEffect(() => {
     nameInputRef.current?.focus();
@@ -54,6 +56,7 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
         name: name.trim(),
         template: format,
         themeId: themeId || undefined,
+        brandId,
       });
       setPhase('opening');
       // Give Vite's filesystem watcher + glob a beat to register the new files
@@ -241,7 +244,7 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
               {availableThemes.map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}
-                  {t.id === tenant?.activeThemeId ? ' — default' : ''}
+                  {t.id === brand?.activeThemeId ? ' — default' : ''}
                 </option>
               ))}
             </select>

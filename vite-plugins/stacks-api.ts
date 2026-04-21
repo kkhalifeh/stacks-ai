@@ -9,6 +9,7 @@ interface CreateStackBody {
   name: string;
   template: 'a4' | 'slide-16x9';
   themeId?: string;
+  brandId?: string;
 }
 
 interface UpdateStackBody {
@@ -22,8 +23,7 @@ interface TerminalBody {
 
 const STACKS_DIR = 'stacks';
 const TEMPLATES_DIR = 'stack-templates';
-const TENANT_TEMPLATES_DIR = 'brand/templates';
-const TENANT_BRAND_DIR = 'brand';
+const BRANDS_DIR = 'brands';
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ \-()]{0,200}$/;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -151,10 +151,15 @@ export function stacksApi(): Plugin {
               return sendJson(res, 400, { error: 'template must be "a4" or "slide-16x9"' });
             }
 
-            // Prefer the tenant-branded template if it exists, else fall back to the generic starter.
-            const tenantTemplate = path.join(root, TENANT_TEMPLATES_DIR, body.template);
+            // Prefer the brand-specific template if it exists, else fall back to the generic starter.
+            const brandId = body.brandId;
+            const brandTemplate = brandId
+              ? path.join(root, BRANDS_DIR, brandId, 'templates', body.template)
+              : null;
             const genericTemplate = path.join(root, TEMPLATES_DIR, body.template);
-            const templateDir = (await exists(tenantTemplate)) ? tenantTemplate : genericTemplate;
+            const templateDir = brandTemplate && (await exists(brandTemplate))
+              ? brandTemplate
+              : genericTemplate;
             const targetDir = stackDir(body.id);
 
             if (!(await exists(templateDir))) {
@@ -169,20 +174,28 @@ export function stacksApi(): Plugin {
               STACK_NAME: body.name.replace(/"/g, '\\"'),
             });
 
-            // If the template didn't bring its own assets/logo, seed from the tenant brand so
+            // Stamp brandId into the new stack.json.
+            const manifestPath = path.join(targetDir, 'stack.json');
+            if (await exists(manifestPath) && brandId) {
+              const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+              manifest.brandId = brandId;
+              await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+            }
+
+            // If the template didn't bring its own assets/logo, seed from the brand so
             // relative logo imports in the template resolve out of the box.
             const targetAssetsDir = path.join(targetDir, 'assets');
             await fs.mkdir(targetAssetsDir, { recursive: true });
             const targetAssetFiles = await fs.readdir(targetAssetsDir);
-            if (targetAssetFiles.length === 0) {
-              const tenantBrandDir = path.join(root, TENANT_BRAND_DIR);
-              if (await exists(tenantBrandDir)) {
-                const brandFiles = await fs.readdir(tenantBrandDir, { withFileTypes: true });
+            if (targetAssetFiles.length === 0 && brandId) {
+              const brandDir = path.join(root, BRANDS_DIR, brandId);
+              if (await exists(brandDir)) {
+                const brandFiles = await fs.readdir(brandDir, { withFileTypes: true });
                 for (const entry of brandFiles) {
                   if (!entry.isFile()) continue;
-                  if (/^logo\.(png|jpg|jpeg|webp|svg|gif)$/i.test(entry.name)) {
+                  if (/^logo(-white)?\.(png|jpg|jpeg|webp|svg|gif)$/i.test(entry.name)) {
                     await fs.copyFile(
-                      path.join(tenantBrandDir, entry.name),
+                      path.join(brandDir, entry.name),
                       path.join(targetAssetsDir, entry.name),
                     );
                   }
@@ -190,17 +203,13 @@ export function stacksApi(): Plugin {
               }
             }
 
-            // If a specific tenant theme was requested, snapshot it into the stack so the stack
-            // keeps that theme regardless of future tenant changes.
-            if (body.themeId) {
-              const themeSrc = path.join(root, TENANT_BRAND_DIR, 'themes', body.themeId, 'theme.css');
+            // If a specific brand theme was requested, snapshot it into the stack.
+            if (body.themeId && brandId) {
+              const themeSrc = path.join(root, BRANDS_DIR, brandId, 'themes', body.themeId, 'theme.css');
               if (await exists(themeSrc)) {
                 const targetThemeDir = path.join(targetDir, 'theme');
                 await fs.mkdir(targetThemeDir, { recursive: true });
                 await fs.copyFile(themeSrc, path.join(targetThemeDir, 'theme.css'));
-
-                // Update stack.json so the loader picks it up
-                const manifestPath = path.join(targetDir, 'stack.json');
                 if (await exists(manifestPath)) {
                   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
                   manifest.theme = 'theme/theme.css';

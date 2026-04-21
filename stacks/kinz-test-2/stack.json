@@ -11,9 +11,22 @@
       "color": "var(--color-kinz-blue)",
       "passwordProtected": false,
       "documents": [
-        { "id": "cover", "label": "Cover", "components": ["TitlePage"] },
-        { "id": "section-1", "label": "Section 1", "components": ["ContentPage"] }
+        {
+          "id": "cover",
+          "label": "Cover",
+          "components": [
+            "TitlePage"
+          ]
+        },
+        {
+          "id": "section-1",
+          "label": "Section 1",
+          "components": [
+            "ContentPage"
+          ]
+        }
       ]
     }
-  ]
+  ],
+  "brandId": "kinz"
 }
