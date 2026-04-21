@@ -1,61 +1,92 @@
 # Document Builder (Launcher)
 
-A multi-stack document builder. Each **stack** is a self-contained directory under `stacks/` with its own pages, assets, theme, knowledge base, and `CLAUDE.md`. The launcher shell at `src/app/` discovers stacks at build time and renders them.
+Stacks AI — a multi-tenant, multi-stack document builder. The launcher (this repo's `src/`, `vite-plugins/`, and build config) discovers **stacks** on disk and renders them. Each **stack** is a self-contained directory under `stacks/` that carries its own pages, assets, optional per-stack theme, knowledge base, auto-memory, and `CLAUDE.md`.
 
-This file governs the launcher only. Stack-specific rules live inside each stack's own `CLAUDE.md`.
+This file governs the **launcher** only. It is **tenant-agnostic and stack-agnostic**: no brand colors, no client names, no per-stack content belongs here. Stack-specific rules live inside each stack's own `CLAUDE.md`. Tenant-specific brand decisions live in `brand/`.
+
+## When you (Claude) are editing from the repo root
+
+You are working on the **app itself** — the launcher, plugins, templates, or tenant brand engine. You are **not** working on any specific stack's content. If the request is about a specific stack (pages, content, kb, stack styling), the stack owns that — launch Claude from inside the stack directory instead (or `cd` into it).
 
 ## Vocabulary
 
 | Concept | Term | Schema key | Meaning |
 |---|---|---|---|
-| Project | **Stack** | — | A directory in `stacks/`. Self-contained: pages, theme, KB, memory, CLAUDE.md |
-| Export unit | **Binder** | `binders[]` | A logical group of documents — one PDF per binder (e.g. "Technical Proposal") |
-| Content unit | **Document** | `binders[].documents[]` | A named piece of content — may span multiple pages (e.g. "TECH-3: Methodology") |
+| Organization | **Tenant** | `brand/tenant.json` | The org running this builder. One per deployment. Owns the logo and the set of named themes under `brand/themes/`. |
+| Project | **Stack** | — | A directory in `stacks/`. Self-contained: pages, theme (optional), kb, memory, CLAUDE.md, `.claude/settings.json` |
+| Export unit | **Binder** | `binders[]` | A logical group of documents — one PDF per binder |
+| Content unit | **Document** | `binders[].documents[]` | A named piece of content — may span multiple pages |
 | Canvas unit | **Page** | `documents[].components[]` | A single rendered page component. Called "slide" in UI when stack format is `slide-16x9` |
 
-The legacy schema keys `groups` and `sections` are still accepted by the loader for backward compat, but all new code and docs use `binders` and `documents`.
+Legacy schema keys `groups` and `sections` are still accepted by the loader for backward compat; all new code uses `binders` and `documents`.
 
-## Repo layout
+## Repo layout (authoritative)
 
 ```
 document-builder/
-├── CLAUDE.md                       # This file (launcher)
-├── index.html
-├── vite.config.ts
-├── src/
+├── CLAUDE.md                       # This file — launcher architecture only
+├── index.html                      # Vite entrypoint
+├── vite.config.ts                  # Build + plugin registration
+├── package.json
+├── .env.example                    # Documents ANTHROPIC_API_KEY
+├── src/                            # Launcher React app
 │   ├── main.tsx
 │   ├── app/
-│   │   ├── App.tsx                 # Launcher shell
-│   │   ├── stacks.ts               # Stack discovery + component registry
-│   │   ├── exportInfo1.ts          # Legacy INFO-1 export (will be generalized)
-│   │   └── components/
-│   │       └── Sidebar.tsx         # Stack/binder/document nav
-│   └── styles/                     # Launcher-level styles (no brand colors here)
-│       ├── index.css
-│       ├── fonts.css
-│       ├── tailwind.css
-│       └── print.css
-└── stacks/
-    └── <stack-id>/
-        ├── stack.json              # Manifest — binders, documents, format, theme
-        ├── CLAUDE.md               # Stack-scoped rules for Claude Code
-        ├── theme/theme.css         # Brand variables for this stack
-        ├── assets/                 # Logos, signatures, images
-        ├── kb/                     # Knowledge base (md, pdf) — in Claude scope when launched inside the stack
-        ├── memory/                 # Stack-scoped auto-memory
-        └── pages/<binder-id>/*.tsx # React pages (canvas-sized components)
+│   │   ├── App.tsx                 # Router: landing / stack viewer / brand studio
+│   │   ├── Landing.tsx             # Stack grid + header
+│   │   ├── BrandStudio.tsx         # Tenant brand studio
+│   │   ├── stacks.ts               # Stack + tenant discovery (import.meta.glob)
+│   │   ├── api.ts                  # Stack/KB/terminal client helpers
+│   │   ├── brand-api.ts            # Tenant brand client helpers
+│   │   ├── exportInfo1.ts          # INFO-1 PDF merge (legacy, generalizable)
+│   │   ├── components/             # Sidebar, StackCard, KbPanel, NewStackModal
+│   │   └── preview/                # Generic preview samples (fallback when tenant has no templates)
+│   └── styles/                     # Launcher-level styles (no brand colors)
+├── vite-plugins/
+│   ├── stacks-api.ts               # Dev-time filesystem API (stacks CRUD, kb, terminal)
+│   └── brand-api.ts                # Dev-time tenant brand API (Claude vision, themes CRUD)
+├── stack-templates/                # Generic fallback templates
+│   ├── a4/                         # Blank A4 starter
+│   └── slide-16x9/                 # Blank slide starter
+├── brand/                          # Tenant: logo + themes + branded templates
+│   ├── tenant.json                 # { name, subtitle, logo, activeThemeId }
+│   ├── logo.*                      # Tenant logo
+│   ├── themes/<id>/theme.css       # Named theme variants
+│   ├── themes/<id>/meta.json       # Theme metadata
+│   └── templates/<format>/         # Tenant-branded starter templates (A4 / slide-16x9)
+├── stacks/
+│   └── <stack-id>/                 # One stack = one folder
+│       ├── stack.json              # Manifest (binders, documents, format, theme pointer)
+│       ├── CLAUDE.md               # Stack-scoped rules (Scope & Locks block enforced)
+│       ├── .claude/settings.json   # Permission denies for writes outside stack
+│       ├── theme/theme.css         # Optional per-stack override (snapshot if themeId was chosen at creation)
+│       ├── assets/                 # Images used by the stack's pages
+│       ├── kb/                     # Knowledge base (md, pdf, other) — Claude scope when running here
+│       ├── memory/                 # Stack-scoped auto-memory (written by Claude Code itself)
+│       └── pages/<binder-id>/*.tsx # Canvas-sized React pages
+└── node_modules/, dist/            # gitignored
 ```
 
-## Stack manifest (`stack.json`)
+## Architecture lock — what this app is and isn't
+
+The launcher is a **structural shell**. Stacks are **data + content**. The two responsibilities are decoupled on purpose:
+
+1. **Launcher code** (`src/`, `vite-plugins/`, `index.html`, `vite.config.ts`, `package.json`, this `CLAUDE.md`) is the app. It changes only when the **capability** of the builder changes (e.g., adding a new route, a new API endpoint, a new feature). It should not contain anything tenant-specific.
+2. **Tenant brand** (`brand/`) is edited through Brand Studio. The Brand Studio API writes `brand/themes/<id>/`, updates `brand/tenant.json.activeThemeId`, and nothing else. Direct manual edits to tenant files are allowed but rare and should preserve the schema.
+3. **Stack content** (`stacks/<id>/`) is where Claude should do content work. Each stack is isolated — it has its own `CLAUDE.md` with a "Scope & Locks" block that declares what can and cannot change inside that stack.
+
+When you (Claude) are running **inside a stack** (via the sidebar "Open Claude in Terminal" button or `cd stacks/<id> && claude`), you must stay within that stack. The stack's `.claude/settings.json` hard-denies Edit/Write to paths that escape the stack directory, and the stack's `CLAUDE.md` repeats the contract.
+
+## Stack manifest schema (`stack.json`)
 
 ```json
 {
   "id": "stack-slug",
   "name": "Human-readable name",
   "subtitle": "Optional tagline",
-  "format": "a4",              // or "slide-16x9" (Phase 1d)
-  "theme": "theme/theme.css",  // path relative to stack root
-  "logo": "assets/logo.png",   // used in sidebar header
+  "format": "a4",              // or "slide-16x9"
+  "theme": "theme/theme.css",  // optional — if omitted, stack inherits tenant active theme
+  "logo": "assets/logo.png",   // optional — if omitted, stack inherits tenant logo
   "binders": [
     {
       "id": "binder-slug",
@@ -66,7 +97,7 @@ document-builder/
       "documents": [
         { "id": "doc-id", "label": "Label", "maxPages": 5, "components": ["ExportA", "ExportB"] }
       ],
-      "attachments": [           // optional, INFO-style
+      "attachments": [
         { "label": "File", "url": "/path/to.pdf" }
       ]
     }
@@ -78,33 +109,36 @@ document-builder/
 
 ## How stacks are loaded
 
-`src/app/stacks.ts` uses Vite's `import.meta.glob` to:
-1. Eager-load every `stacks/*/stack.json`.
-2. Eager-load every `stacks/*/pages/**/*.tsx` and flatten their named exports into one registry per stack.
-3. Eager-load every stack's theme CSS (but inject only the active stack's variables into the document).
+`src/app/stacks.ts`:
+1. Eager-loads every `stacks/*/stack.json`.
+2. Eager-loads every `stacks/*/pages/**/*.tsx` and flattens their named exports into one registry per stack.
+3. Eager-loads every stack's theme CSS; only the active stack's vars are injected into the document at runtime.
+4. Loads tenant from `brand/tenant.json` and tenant themes from `brand/themes/*/`.
+5. Resolution: `stack.themeCss ?? tenant.activeTheme.css`; `stack.logoUrl ?? tenant.logoUrl`.
 
-Adding a new stack = create a new folder under `stacks/` with a `stack.json`, page files, and a theme. No launcher code changes required.
+Adding a new stack = create a new folder under `stacks/` with a `stack.json`, page files, and optional theme. No launcher code changes required; Vite hot-reloads the new stack.
 
-## Canvas format (Phase 1d)
+## Canvas format
 
 A stack's `format` drives page dimensions and print CSS:
-- `"a4"` — 794×1123px, portrait, print `@page size: A4 portrait`
-- `"slide-16x9"` — 1280×720px, landscape, print `@page size: 1280px 720px landscape`
+- `"a4"` — 794×1123px, portrait, `@page size: A4 portrait`
+- `"slide-16x9"` — 1280×720px, landscape, `@page size: 1280px 720px landscape`
 
-Pages are authored as plain React components; the canvas wrapper enforces the dimensions. Each stack is single-format (no mixed canvases in one stack).
+Pages are plain React components; the optional `Canvas` wrapper in `src/app/components/Canvas.tsx` enforces dimensions and a flex-column layout. Each stack is single-format.
 
 ## Launcher behavior rules
 
-- The launcher shell is **stack-agnostic**: no Kinz colors, no tender copy, nothing hard-coded per stack.
-- Brand colors, logos, page styles belong in the stack, not in `src/`.
-- Print-time rendering filters by active stack + active binder (same behavior as pre-refactor, now generalized).
-- The landing page (Phase 1b) will list all stacks and offer "new stack" creation. Until that lands, the app boots straight into the first stack.
+- The launcher shell is **tenant-agnostic**: no brand colors, no client names, no per-stack copy. Launcher palette lives in `src/styles/launcher.css` (neutral + one accent).
+- **Brand colors, logos, page styles belong in the stack (or in `brand/` at tenant level), not in `src/`.**
+- Print-time rendering filters by active stack + active binder + stack format (see `applyPrintPageSize` in `stacks.ts`).
+- Stack CRUD goes through `vite-plugins/stacks-api.ts`. Brand changes go through `vite-plugins/brand-api.ts`. Both run only in dev mode.
 
-## Adding a new stack
+## Brand Studio flow (tenant level)
 
-Until the launcher UI supports it (Phase 1b), create stacks manually:
-```bash
-mkdir -p stacks/my-stack/{assets,kb,memory,theme,pages/main}
-# Write stack.json, theme/theme.css, pages/main/*.tsx, CLAUDE.md
-```
-The dev server hot-reloads the new stack.
+1. User opens `?view=brand` from landing
+2. Upload logo + (optional) brand name + keywords → POST `/__api/brand/logo`
+3. Generate theme → POST `/__api/brand/generate` → Claude vision returns structured `ThemeProposal`
+4. Preview tabs (A4 Title/Content, Slide Title/Content) render tenant templates with the proposal scoped via `.brand-preview-tenant`
+5. Save as new theme → POST `/__api/brand/themes` writes `brand/themes/<slug>/{theme.css, meta.json}`
+6. Set default → POST `/__api/brand/themes/<id>/default` updates `tenant.json.activeThemeId`
+7. When creating a new stack, NewStackModal can snapshot a specific saved theme into the stack's own `theme/theme.css`
