@@ -1,0 +1,25 @@
+/*
+  KINZ BRAND THEME
+  ────────────────
+  Colors derived from the Kinz cube logo.
+  Primary blue matches the cube's dominant blue facet.
+*/
+
+:root {
+  --color-primary: #1976D2;     /* Kinz cube blue */
+  --color-primary-light: #42A5F5;
+  --color-dark: #1B2332;        /* Deep navy-charcoal */
+  --color-dark-surface: #232B3B;
+  --color-light-bg: #F5F7FA;    /* Cool gray canvas */
+  --color-text: #1B2332;        /* Main text — matches dark */
+  --color-text-muted: rgba(27, 35, 50, 0.65);
+  --color-border: rgba(27, 35, 50, 0.12);
+
+  /* Kinz cube accent palette */
+  --color-kinz-red: #E53935;
+  --color-kinz-orange: #F57C00;
+  --color-kinz-yellow: #FDD835;
+  --color-kinz-green: #43A047;
+  --color-kinz-blue: #1976D2;
+  --color-kinz-navy: #0D47A1;
+}

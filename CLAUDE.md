@@ -1,292 +1,110 @@
-# Document Builder — AI-GIS Tender Proposal
+# Document Builder (Launcher)
 
-Section-based document builder for the AI-GIS PoC tender proposal. Each section maps to a required RFP form (TECH-1 through TECH-6) with enforced page limits. Sections are A4-sized React components (794×1123px). The user browses sections via the sidebar and exports to PDF via browser print.
+A multi-stack document builder. Each **stack** is a self-contained directory under `stacks/` with its own pages, assets, theme, knowledge base, and `CLAUDE.md`. The launcher shell at `src/app/` discovers stacks at build time and renders them.
 
-## Quick Start
+This file governs the launcher only. Stack-specific rules live inside each stack's own `CLAUDE.md`.
 
+## Vocabulary
+
+| Concept | Term | Schema key | Meaning |
+|---|---|---|---|
+| Project | **Stack** | — | A directory in `stacks/`. Self-contained: pages, theme, KB, memory, CLAUDE.md |
+| Export unit | **Binder** | `binders[]` | A logical group of documents — one PDF per binder (e.g. "Technical Proposal") |
+| Content unit | **Document** | `binders[].documents[]` | A named piece of content — may span multiple pages (e.g. "TECH-3: Methodology") |
+| Canvas unit | **Page** | `documents[].components[]` | A single rendered page component. Called "slide" in UI when stack format is `slide-16x9` |
+
+The legacy schema keys `groups` and `sections` are still accepted by the loader for backward compat, but all new code and docs use `binders` and `documents`.
+
+## Repo layout
+
+```
+document-builder/
+├── CLAUDE.md                       # This file (launcher)
+├── index.html
+├── vite.config.ts
+├── src/
+│   ├── main.tsx
+│   ├── app/
+│   │   ├── App.tsx                 # Launcher shell
+│   │   ├── stacks.ts               # Stack discovery + component registry
+│   │   ├── exportInfo1.ts          # Legacy INFO-1 export (will be generalized)
+│   │   └── components/
+│   │       └── Sidebar.tsx         # Stack/binder/document nav
+│   └── styles/                     # Launcher-level styles (no brand colors here)
+│       ├── index.css
+│       ├── fonts.css
+│       ├── tailwind.css
+│       └── print.css
+└── stacks/
+    └── <stack-id>/
+        ├── stack.json              # Manifest — binders, documents, format, theme
+        ├── CLAUDE.md               # Stack-scoped rules for Claude Code
+        ├── theme/theme.css         # Brand variables for this stack
+        ├── assets/                 # Logos, signatures, images
+        ├── kb/                     # Knowledge base (md, pdf) — in Claude scope when launched inside the stack
+        ├── memory/                 # Stack-scoped auto-memory
+        └── pages/<binder-id>/*.tsx # React pages (canvas-sized components)
+```
+
+## Stack manifest (`stack.json`)
+
+```json
+{
+  "id": "stack-slug",
+  "name": "Human-readable name",
+  "subtitle": "Optional tagline",
+  "format": "a4",              // or "slide-16x9" (Phase 1d)
+  "theme": "theme/theme.css",  // path relative to stack root
+  "logo": "assets/logo.png",   // used in sidebar header
+  "binders": [
+    {
+      "id": "binder-slug",
+      "label": "Binder name",
+      "subtitle": "Optional subtitle",
+      "color": "var(--color-kinz-blue)",
+      "passwordProtected": false,
+      "documents": [
+        { "id": "doc-id", "label": "Label", "maxPages": 5, "components": ["ExportA", "ExportB"] }
+      ],
+      "attachments": [           // optional, INFO-style
+        { "label": "File", "url": "/path/to.pdf" }
+      ]
+    }
+  ]
+}
+```
+
+`components` values are named exports from any `.tsx` file under `pages/<binder-id>/`. The loader flattens all exports and resolves by name, so one file can export multiple page components.
+
+## How stacks are loaded
+
+`src/app/stacks.ts` uses Vite's `import.meta.glob` to:
+1. Eager-load every `stacks/*/stack.json`.
+2. Eager-load every `stacks/*/pages/**/*.tsx` and flatten their named exports into one registry per stack.
+3. Eager-load every stack's theme CSS (but inject only the active stack's variables into the document).
+
+Adding a new stack = create a new folder under `stacks/` with a `stack.json`, page files, and a theme. No launcher code changes required.
+
+## Canvas format (Phase 1d)
+
+A stack's `format` drives page dimensions and print CSS:
+- `"a4"` — 794×1123px, portrait, print `@page size: A4 portrait`
+- `"slide-16x9"` — 1280×720px, landscape, print `@page size: 1280px 720px landscape`
+
+Pages are authored as plain React components; the canvas wrapper enforces the dimensions. Each stack is single-format (no mixed canvases in one stack).
+
+## Launcher behavior rules
+
+- The launcher shell is **stack-agnostic**: no Kinz colors, no tender copy, nothing hard-coded per stack.
+- Brand colors, logos, page styles belong in the stack, not in `src/`.
+- Print-time rendering filters by active stack + active binder (same behavior as pre-refactor, now generalized).
+- The landing page (Phase 1b) will list all stacks and offer "new stack" creation. Until that lands, the app boots straight into the first stack.
+
+## Adding a new stack
+
+Until the launcher UI supports it (Phase 1b), create stacks manually:
 ```bash
-npm install && npm run dev
+mkdir -p stacks/my-stack/{assets,kb,memory,theme,pages/main}
+# Write stack.json, theme/theme.css, pages/main/*.tsx, CLAUDE.md
 ```
-
-## Architecture
-
-```
-src/
-├── app/
-│   ├── App.tsx                    # Section registry + app shell
-│   └── components/
-│       ├── Sidebar.tsx            # Navigation (with page limits) + export
-│       └── pages/                 # One file per tender section
-│           ├── CoverPage.tsx              # Proposal cover
-│           ├── Tech1CoverLetter.tsx       # TECH-1 (1 page max)
-│           ├── Tech2JointTeam.tsx         # TECH-2 (5 pages max)
-│           ├── Tech2aCompanyExperience.tsx # TECH-2a (5 pages max)
-│           ├── Tech3Methodology.tsx       # TECH-3 (15 pages max)
-│           ├── Tech4WorkSchedule.tsx      # TECH-4 (3 pages max)
-│           ├── Tech5Personnel.tsx         # TECH-5 (3 pages max)
-│           └── Tech6CVs.tsx              # TECH-6 (10 pages max)
-├── assets/                        # Images, logos, etc.
-└── styles/
-    ├── theme.css                  # Brand colors (edit these first)
-    ├── print.css                  # PDF/print styles
-    ├── fonts.css                  # Font imports
-    ├── tailwind.css               # Tailwind config
-    └── index.css                  # Imports all above
-```
-
-## Tender Sections & Page Limits
-
-| Section | File | Max Pages | RFP Weight |
-|---------|------|-----------|------------|
-| TECH-1 | Tech1CoverLetter.tsx | 1 | — |
-| TECH-2 | Tech2JointTeam.tsx | 5 | 15 pts (experience) |
-| TECH-2a | Tech2aCompanyExperience.tsx | 5 | 15 pts (experience) |
-| TECH-3 | Tech3Methodology.tsx | 15 | 50 pts (methodology) |
-| TECH-4 | Tech4WorkSchedule.tsx | 3 | — |
-| TECH-5 | Tech5Personnel.tsx | 3 | 35 pts (staff) |
-| TECH-6 | Tech6CVs.tsx | 10 | 35 pts (staff) |
-
-## How Sections Work
-
-Each section is a React component. The `PageEntry` type includes a `maxPages` field:
-
-```tsx
-export interface PageEntry {
-  id: PageId;
-  label: string;
-  component: React.FC;
-  maxPages?: number;  // RFP page limit for this section
-}
-```
-
-The sidebar displays the page limit badge next to each section. The cover page has no limit.
-
-## Typography Standard
-
-All pages MUST follow this type scale. No exceptions.
-
-| Role | Class | Size | Example |
-|------|-------|------|---------|
-| **Cover title** | `text-3xl font-bold` | 30px | Cover page main title only |
-| **Page title** | `text-xl font-bold` | 20px | `TECH-2: Joint Team` |
-| **Section heading** | `text-base font-bold` | 16px | `A. Company Organization` |
-| **Sub-heading** | `text-sm font-bold` | 14px | `Organizational Structure`, project card titles |
-| **Body text** | `text-[13px]` | 13px | All paragraphs, descriptions, project writeups |
-| **Table text** | `text-xs` | 12px | Table cells, form field values, labels |
-| **Badge** | `text-[10px]` | 10px | Page limit badges only |
-| **Footer** | `text-xs` | 12px | `Kinz — www.kinz.jo` + section/page number |
-
-**Line heights:**
-- Body text: `leading-[1.7]` or `leading-relaxed`
-- Table/label text: default
-
-**Font weight rules:**
-- Page titles, section headings, sub-headings: `font-bold`
-- Table headers: `font-semibold`
-- Labels: `font-medium`
-- Body text: normal weight (bold/strong for emphasis only)
-
-**Do NOT:**
-- Use `text-lg` for section headings (use `text-base`)
-- Use `text-sm` for body paragraphs (use `text-[13px]`)
-- Use `text-2xl` anywhere except the cover page
-- Mix font sizes within the same content role across pages
-
-## Writing Style
-
-**Em dashes:** Minimize use of ` — ` (em dash). Overuse signals AI-generated content. Use commas, colons, semicolons, parentheses, or sentence restructuring instead. Reserve em dashes for rare cases where a strong parenthetical break genuinely improves readability. Target: no more than 1-2 per page, if any.
-
-**Tone:** Professional, concise, structured, confident. No unnecessary jargon. Write like a senior consultant, not an AI.
-
-**Avoid patterns that read as AI-generated:**
-- Excessive em dashes
-- Lists where a paragraph would be more natural
-- Filler phrases ("It is worth noting that...", "In this context...")
-- Restating what was just said in different words
-
-## Page Layout Standard
-
-All section pages (TECH-2 through TECH-6) MUST follow these structural rules. Tech1 is a letter format and is exempt.
-
-**Content wrapper** (the div after the accent stripe):
-```
-className="flex-1 px-12 pt-8 pb-5 flex flex-col overflow-hidden"
-```
-
-**Page title + badge** (first page of each section only):
-```
-className="flex items-center justify-between mb-4"
-```
-
-**Divider line** (after the title):
-```
-className="h-px mb-5"
-```
-
-**Footer** (every page):
-```
-className="pt-3 mt-auto flex justify-between items-center text-xs border-t"
-```
-- Proposal pages left: `Kinz for Information Technology &middot; www.kinz.jo`
-- Proposal pages right: `TECH-N &middot; Page X` (always include section name + page number)
-- Document pages left: `Kinz for Information Technology &middot; Internal Document` or `&middot; Confidential`
-- Document pages right: `Document Name &middot; Page X`
-
-**Section heading with left accent bar:**
-```tsx
-<div className="flex items-center gap-2 mb-3">
-  <div className="w-1 h-5 rounded-full" style={{ background: 'var(--color-kinz-blue)' }} />
-  <h2 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Section Title</h2>
-</div>
-```
-
-**Continuation pages** (P2, P3, etc.) use the same wrapper but do NOT repeat the page title/badge/divider.
-
-## How to Add a New Section
-
-Create a new file in `src/app/components/pages/`. Every page MUST use this structure:
-
-```tsx
-import kinzIcon from '@assets/KinzIcon.png';
-
-export function MySection() {
-  return (
-    <div className="w-[794px] h-[1123px] flex flex-col">
-      {/* Kinz accent stripe */}
-      <div className="flex h-1.5 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-kinz-red)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-orange)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-yellow)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-green)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-blue)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-kinz-navy)' }} />
-      </div>
-
-      <div className="flex-1 px-12 pt-8 pb-5 flex flex-col overflow-hidden">
-        {/* Page title + badge */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <img src={kinzIcon} alt="" className="w-7 h-7 opacity-20" />
-            <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
-              TECH-N: Section Title
-            </h1>
-          </div>
-          <span className="text-[10px] px-2 py-1 rounded font-semibold tracking-wide uppercase"
-            style={{ background: 'var(--color-primary)', color: 'white' }}>
-            N pages
-          </span>
-        </div>
-        <div className="h-px mb-5" style={{ background: 'var(--color-border)' }} />
-
-        {/* Section heading */}
-        <h2 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>
-          A. Section Heading
-        </h2>
-
-        {/* Body text */}
-        <p className="text-[13px] leading-[1.7]" style={{ color: 'var(--color-text)' }}>
-          Paragraph content...
-        </p>
-
-        {/* Sub-heading */}
-        <h3 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-          Sub-heading
-        </h3>
-
-        {/* Footer — always at the bottom */}
-        <div className="pt-3 mt-auto flex justify-between items-center text-xs border-t"
-          style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>
-          <span>Kinz for Information Technology &mdash; www.kinz.jo</span>
-          <span>TECH-N &middot; Page X</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-```
-
-Multi-page sections export multiple components from the same file. Register all pages in the `pages` array in `App.tsx`.
-
-## Theme (Kinz Brand)
-
-Edit `src/styles/theme.css`:
-
-```css
-:root {
-  --color-primary: #1976D2;      /* Kinz cube blue */
-  --color-primary-light: #42A5F5;
-  --color-dark: #1B2332;         /* Deep navy-charcoal */
-  --color-kinz-red: #E53935;
-  --color-kinz-orange: #F57C00;
-  --color-kinz-yellow: #FDD835;
-  --color-kinz-green: #43A047;
-  --color-kinz-blue: #1976D2;
-  --color-kinz-navy: #0D47A1;
-}
-```
-
-## Page Content Patterns
-
-**Light section:**
-```tsx
-<div className="rounded-lg p-5 mb-5" style={{ background: 'var(--color-light-bg)' }}>
-  <h3 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Heading</h3>
-  <p className="text-[13px]" style={{ color: 'var(--color-text-muted)' }}>Content</p>
-</div>
-```
-
-**Accent callout:**
-```tsx
-<div className="rounded-lg p-4" style={{ background: 'var(--color-primary)', color: 'white' }}>
-  <p className="text-[13px] leading-[1.7]">
-    <strong>Relevance:</strong> Explanation text...
-  </p>
-</div>
-```
-
-**Bordered card with left accent:**
-```tsx
-<div className="rounded-lg p-5 border-l-4" style={{ borderColor: 'var(--color-kinz-blue)', background: 'var(--color-light-bg)' }}>
-  <h3 className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Heading</h3>
-  <p className="text-[13px]" style={{ color: 'var(--color-text-muted)' }}>Content</p>
-</div>
-```
-
-**Table:**
-```tsx
-<table className="w-full text-xs">
-  <thead>
-    <tr style={{ background: 'var(--color-light-bg)' }}>
-      <th className="text-left py-2 px-4 font-semibold" style={{ color: 'var(--color-text)' }}>Header</th>
-    </tr>
-  </thead>
-  <tbody style={{ color: 'var(--color-text)' }}>
-    <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-      <td className="py-2 px-4">Cell</td>
-    </tr>
-  </tbody>
-</table>
-```
-
-## PDF Export
-
-The "Export to PDF" button calls `window.print()`. The print CSS in `print.css`:
-- Hides the sidebar
-- Renders ALL pages stacked (not just the active one)
-- Adds page breaks between each page
-- Forces exact color reproduction
-
-In the browser print dialog, the user should select:
-- **Destination:** Save as PDF
-- **Margins:** None
-- **Background graphics:** ON
-
-## Rules
-
-- Every page component MUST be exactly `w-[794px] h-[1123px]`
-- Use `overflow-hidden` on the content wrapper to prevent footer overlap
-- Do not put content outside the page wrapper — it will break PDF layout
-- Follow the Typography Standard above — no ad-hoc font sizes
-- Use Tailwind classes for spacing/layout, CSS variables for colors
-- Keep page files focused — one file per section, multiple exports for multi-page sections
-- Images should be placed in `src/assets/` and imported via `@assets/` alias
+The dev server hot-reloads the new stack.

@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import html2canvas from 'html2canvas';
-import { infoAttachments } from './App';
+import type { AttachmentDef } from './stacks';
 
 // A4 dimensions in points (72 dpi)
 const A4_WIDTH = 595.28;
@@ -10,11 +10,9 @@ const A4_HEIGHT = 841.89;
  * Render all INFO-1 page components to images, merge with financial PDFs,
  * and download as a single unprotected PDF.
  */
-export async function exportInfo1Merged(): Promise<void> {
+export async function exportInfo1Merged(attachments: AttachmentDef[]): Promise<void> {
   const mergedDoc = await PDFDocument.create();
 
-  // Step 1: Capture the rendered INFO-1 page(s) from the print view
-  // We look for elements with data-info-page attribute
   const pageElements = document.querySelectorAll<HTMLElement>('[data-info-page]');
 
   if (pageElements.length === 0) {
@@ -44,8 +42,7 @@ export async function exportInfo1Merged(): Promise<void> {
     });
   }
 
-  // Step 2: Append all financial statement PDFs
-  for (const att of infoAttachments) {
+  for (const att of attachments) {
     const response = await fetch(att.url);
     const pdfBytes = await response.arrayBuffer();
     const srcDoc = await PDFDocument.load(pdfBytes);
@@ -55,7 +52,6 @@ export async function exportInfo1Merged(): Promise<void> {
     }
   }
 
-  // Step 3: Download
   const mergedBytes = await mergedDoc.save();
   const blob = new Blob([mergedBytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
