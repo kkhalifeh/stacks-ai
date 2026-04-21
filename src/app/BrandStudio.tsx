@@ -320,7 +320,7 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {themes.map(t => {
-                  const isActive = t.id === (tenantData?.activeThemeId ?? initialTenant?.activeThemeId);
+                  const isActive = t.id === (tenantData?.activeThemeId ?? loadedBrand?.activeThemeId);
                   const isSelected = t.id === selectedThemeId && !proposal;
                   return (
                     <li
