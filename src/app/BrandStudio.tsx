@@ -2,19 +2,19 @@ import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Check, Image as ImageIcon, Sparkles, Star, Trash2, Upload } from 'lucide-react';
 import {
-  deleteTheme,
+  brandLogoUrl,
+  deleteBrandTheme,
   ensureGoogleFonts,
   extractRootVars,
-  generateTenantTheme,
-  getTenant,
+  generateBrandTheme,
+  getBrand as fetchBrand,
   googleFontsForProposal,
   proposalToCssVars,
-  saveTheme,
-  setDefaultTheme,
-  tenantLogoUrl,
-  updateTenant,
-  updateThemeFonts,
-  uploadTenantLogo,
+  saveBrandTheme,
+  setDefaultBrandTheme,
+  updateBrand,
+  updateBrandThemeFonts,
+  uploadBrandLogo,
   type TenantBrand,
   type ThemeMeta,
   type ThemeProposal,
@@ -22,7 +22,13 @@ import {
 } from './brand-api';
 import { FontSelect } from './components/brand/FontSelect';
 import { findFontOption } from './fontCatalog';
-import { applyRawTheme, tenant as initialTenant, tenantTemplates, type TenantThemeInfo } from './stacks';
+import {
+  applyRawTheme,
+  brands as loadedBrands,
+  getBrand,
+  type BrandThemeInfo,
+  type LoadedBrand,
+} from './stacks';
 import { ReferencesPanel } from './components/brand/ReferencesPanel';
 import { A4TitleSample } from './preview/A4TitleSample';
 import { A4ContentSample } from './preview/A4ContentSample';
@@ -54,27 +60,28 @@ const PREVIEW_SCALE_A4 = 0.5;
 const PREVIEW_SCALE_SLIDE = 0.45;
 const PREVIEW_SCOPE = 'brand-preview-tenant';
 
-export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
+export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
+  const loadedBrand: LoadedBrand | undefined = getBrand(brandId) ?? loadedBrands[0];
   const [tenantData, setTenantData] = useState<TenantBrand | null>(null);
-  const [name, setName] = useState(initialTenant?.name ?? '');
+  const [name, setName] = useState(loadedBrand?.name ?? brandId);
   const [keywords, setKeywords] = useState('');
   const [feedback, setFeedback] = useState('');
   const [logoVersion, setLogoVersion] = useState(0);
-  const [hasLogo, setHasLogo] = useState(Boolean(initialTenant?.logoUrl));
+  const [hasLogo, setHasLogo] = useState(Boolean(loadedBrand?.logoUrl));
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
   const [variants, setVariants] = useState<ThemeVariant[] | null>(null);
   const [activeVariantIdx, setActiveVariantIdx] = useState<number>(0);
   /** Pending font overrides when editing a SAVED theme (no proposal active). */
   const [savedFontOverride, setSavedFontOverride] = useState<{ heading?: string; body?: string } | null>(null);
   const [savingFonts, setSavingFonts] = useState(false);
-  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(initialTenant?.activeThemeId ?? null);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(loadedBrand?.activeThemeId ?? null);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<PreviewTab>('a4-title');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const initialThemesFromLoader = useMemo<TenantThemeInfo[]>(() => initialTenant?.themes ?? [], []);
+  const initialThemesFromLoader = useMemo<BrandThemeInfo[]>(() => loadedBrand?.themes ?? [], [loadedBrand]);
   const selectedThemeCssFromLoader = useMemo(() => {
     return initialThemesFromLoader.find(t => t.id === selectedThemeId)?.themeCss;
   }, [initialThemesFromLoader, selectedThemeId]);
@@ -89,25 +96,25 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
     }
   }, [proposal, selectedThemeCssFromLoader]);
 
-  // Initial fetch of server-side tenant state (for up-to-date themes list after saves/deletes elsewhere)
+  // Initial fetch of server-side brand state
   const refreshTenant = useCallback(async () => {
     try {
-      const t = await getTenant();
+      const t = await fetchBrand(brandId);
       setTenantData(t);
       if (!name) setName(t.name);
       setHasLogo(Boolean(t.logo));
       if (!selectedThemeId && t.activeThemeId) setSelectedThemeId(t.activeThemeId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tenant brand');
+      setError(err instanceof Error ? err.message : 'Failed to load brand');
     }
-  }, [name, selectedThemeId]);
+  }, [brandId, name, selectedThemeId]);
 
-  useEffect(() => { refreshTenant(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refreshTenant(); }, [brandId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = useCallback(async (file: File) => {
     setError(null);
     try {
-      await uploadTenantLogo(file);
+      await uploadBrandLogo(brandId, file);
       setHasLogo(true);
       setLogoVersion(v => v + 1);
     } catch (err) {
@@ -120,9 +127,9 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
     setGenerating(true);
     try {
       if (tenantData && name && name !== tenantData.name) {
-        await updateTenant({ name: name.trim() });
+        await updateBrand(brandId, { name: name.trim() });
       }
-      const { variants } = await generateTenantTheme({
+      const { variants } = await generateBrandTheme(brandId, {
         name: name.trim() || 'Brand',
         keywords: keywords.trim() || undefined,
         feedback: feedback.trim() || undefined,
@@ -133,7 +140,6 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
       const firstProposal = variants[0]?.proposal ?? null;
       setProposal(firstProposal);
       if (firstProposal) ensureGoogleFonts(googleFontsForProposal(firstProposal));
-      // Preload fonts for all variants so thumbnails render correctly
       variants.forEach(v => ensureGoogleFonts(googleFontsForProposal(v.proposal)));
       setFeedback('');
     } catch (err) {
@@ -145,15 +151,14 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
 
   async function handleSaveTheme(setAsDefault: boolean) {
     if (!proposal) return;
-    const defaultName = `${tenantData?.name ?? 'Brand'} v${(tenantData?.themes.length ?? 0) + 1}`;
+    const defaultName = `${tenantData?.name ?? loadedBrand?.name ?? 'Brand'} v${(tenantData?.themes.length ?? 0) + 1}`;
     const name = window.prompt('Save theme as', defaultName);
     if (!name) return;
     setSaving(true);
     setError(null);
     try {
-      const saved = await saveTheme({ name: name.trim(), proposal, setDefault: setAsDefault });
-      // Reload to pick up the new theme through the Vite glob
-      window.location.href = `/?view=brand&theme=${encodeURIComponent(saved.id)}`;
+      const saved = await saveBrandTheme(brandId, { name: name.trim(), proposal, setDefault: setAsDefault });
+      window.location.href = `/?brand=${encodeURIComponent(brandId)}&view=brand&theme=${encodeURIComponent(saved.id)}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
       setSaving(false);
@@ -162,7 +167,7 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
 
   async function handleSetDefault(id: string) {
     try {
-      await setDefaultTheme(id);
+      await setDefaultBrandTheme(brandId, id);
       await refreshTenant();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not set default');
@@ -173,14 +178,14 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
     const ok = window.confirm(`Delete theme "${themeName}"?`);
     if (!ok) return;
     try {
-      await deleteTheme(id);
-      window.location.href = '/?view=brand';
+      await deleteBrandTheme(brandId, id);
+      window.location.href = `/?brand=${encodeURIComponent(brandId)}&view=brand`;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed');
     }
   }
 
-  const logoUrlForPreview = hasLogo ? tenantLogoUrl(logoVersion) : initialTenant?.logoUrl;
+  const logoUrlForPreview = hasLogo ? brandLogoUrl(brandId, logoVersion) : loadedBrand?.logoUrl;
   const themes = tenantData?.themes ?? initialThemesFromLoader.map(t => ({
     id: t.id, name: t.name, description: t.description, createdAt: t.createdAt,
   }));
@@ -240,7 +245,7 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
               {hasLogo ? (
                 <>
                   <img
-                    src={tenantLogoUrl(logoVersion)}
+                    src={brandLogoUrl(brandId, logoVersion)}
                     alt=""
                     className="w-10 h-10 object-contain flex-shrink-0"
                     style={{ background: 'white', padding: 4, borderRadius: 'var(--lx-radius-sm)' }}
@@ -361,7 +366,7 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
             )}
           </div>
 
-          <ReferencesPanel />
+          <ReferencesPanel brandId={brandId} />
 
           {/* Typography overrides — always visible. Controls either the live proposal or the selected saved theme. */}
           <TypographyPanel
@@ -409,7 +414,7 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
               if (!selectedThemeId || !savedFontOverride) return;
               setSavingFonts(true);
               try {
-                await updateThemeFonts(selectedThemeId, {
+                await updateBrandThemeFonts(brandId, selectedThemeId, {
                   heading_font: savedFontOverride.heading,
                   body_font: savedFontOverride.body,
                 });
@@ -649,11 +654,12 @@ export function BrandStudio({ brandId: _brandId, onBack }: BrandStudioProps) {
             <PreviewCanvas
               key={proposal
                 ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}-${proposal.typography.heading_font}-${proposal.typography.body_font}`
-                : `${selectedThemeId ?? 'none'}-${savedFontOverride?.heading ?? ''}-${savedFontOverride?.body ?? ''}`}
+                : `${brandId}-${selectedThemeId ?? 'none'}-${savedFontOverride?.heading ?? ''}-${savedFontOverride?.body ?? ''}`}
               tab={previewTab}
               brandName={name.trim() || tenantData?.name || 'Brand'}
               logoUrl={logoUrlForPreview}
               scale={previewTab.startsWith('a4') ? PREVIEW_SCALE_A4 : PREVIEW_SCALE_SLIDE}
+              templates={loadedBrand?.templates ?? {}}
             />
           </div>
         </div>
@@ -683,15 +689,17 @@ function PreviewCanvas({
   brandName,
   logoUrl,
   scale,
+  templates,
 }: {
   tab: PreviewTab;
   brandName: string;
   logoUrl?: string;
   scale: number;
+  templates: LoadedBrand['templates'];
 }) {
   const { w, h } = tab.startsWith('a4') ? { w: 794, h: 1123 } : { w: 1280, h: 720 };
   const tenantMapping = TENANT_COMPONENT_BY_TAB[tab];
-  const tenantComponent = tenantTemplates[tenantMapping.format]?.components[tenantMapping.name];
+  const tenantComponent = templates[tenantMapping.format]?.components[tenantMapping.name];
   const Generic = GENERIC_BY_TAB[tab];
 
   return (

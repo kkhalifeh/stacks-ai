@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Image as ImageIcon, RefreshCw, Trash2, Upload } from 'lucide-react';
-import { deleteReference, listReferences, uploadReference, type BrandReference } from '../../brand-api';
+import { deleteBrandReference, listBrandReferences, uploadBrandReference, type BrandReference } from '../../brand-api';
 
 interface ReferencesPanelProps {
+  brandId: string;
   /** Called whenever the references list changes so the parent knows to include them in the next generate. */
   onChanged?: (refs: BrandReference[]) => void;
 }
@@ -13,7 +14,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
-export function ReferencesPanel({ onChanged }: ReferencesPanelProps) {
+export function ReferencesPanel({ brandId, onChanged }: ReferencesPanelProps) {
   const [refs, setRefs] = useState<BrandReference[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export function ReferencesPanel({ onChanged }: ReferencesPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const { references } = await listReferences();
+      const { references } = await listBrandReferences(brandId);
       setRefs(references);
       onChanged?.(references);
     } catch (err) {
@@ -41,7 +42,7 @@ export function ReferencesPanel({ onChanged }: ReferencesPanelProps) {
     const arr = Array.from(files);
     if (arr.length === 0) return;
     setUploadingNames(arr.map(f => f.name));
-    const results = await Promise.allSettled(arr.map(f => uploadReference(f)));
+    const results = await Promise.allSettled(arr.map(f => uploadBrandReference(brandId, f)));
     setUploadingNames([]);
     const failed = results
       .map((r, i) => ({ r, name: arr[i].name }))
@@ -72,7 +73,7 @@ export function ReferencesPanel({ onChanged }: ReferencesPanelProps) {
     const ok = window.confirm(`Remove reference "${name}"?`);
     if (!ok) return;
     try {
-      await deleteReference(name);
+      await deleteBrandReference(brandId, name);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed');
