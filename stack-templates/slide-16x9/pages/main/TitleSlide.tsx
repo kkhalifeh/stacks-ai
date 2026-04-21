@@ -1,7 +1,10 @@
+import { Canvas } from '@/app/components/Canvas';
+
 export function TitleSlide() {
   return (
-    <div
-      className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden"
+    <Canvas
+      format="slide-16x9"
+      className="relative overflow-hidden"
       style={{ background: 'var(--color-dark)' }}
     >
       <div
@@ -32,6 +35,6 @@ export function TitleSlide() {
         <span>__STACK_NAME__</span>
         <span>1 / 1</span>
       </div>
-    </div>
+    </Canvas>
   );
 }

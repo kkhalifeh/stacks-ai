@@ -199,3 +199,22 @@ export function applyStackTheme(stack: LoadedStack | undefined): void {
   }
   activeThemeEl.textContent = stack?.themeCss ?? '';
 }
+
+let activePrintPageSizeEl: HTMLStyleElement | null = null;
+
+export function applyPrintPageSize(format: StackFormat | undefined): void {
+  if (typeof document === 'undefined') return;
+  if (!activePrintPageSizeEl) {
+    activePrintPageSizeEl = document.createElement('style');
+    activePrintPageSizeEl.setAttribute('data-print-page-size', '');
+    document.head.appendChild(activePrintPageSizeEl);
+  }
+  if (!format) {
+    activePrintPageSizeEl.textContent = '';
+    return;
+  }
+  const rule = format === 'slide-16x9'
+    ? '@page { size: 1280px 720px landscape; margin: 0; }'
+    : '@page { size: A4 portrait; margin: 0; }';
+  activePrintPageSizeEl.textContent = rule;
+}

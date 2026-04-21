@@ -1,6 +1,8 @@
+import { Canvas } from '@/app/components/Canvas';
+
 export function TitlePage() {
   return (
-    <div className="w-[794px] h-[1123px] flex flex-col">
+    <Canvas format="a4">
       <div className="flex h-1.5 flex-shrink-0">
         <div className="flex-1" style={{ background: 'var(--color-accent-1)' }} />
         <div className="flex-1" style={{ background: 'var(--color-accent-2)' }} />
@@ -31,6 +33,6 @@ export function TitlePage() {
           <span>Page 1</span>
         </div>
       </div>
-    </div>
+    </Canvas>
   );
 }

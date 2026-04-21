@@ -60,7 +60,16 @@
       "Bash(curl -s -X PATCH http://localhost:5173/__api/stacks/verify-rename/binders/main -H 'Content-Type: application/json' -d '{\"label\":\"Proposal\"}')",
       "Bash(curl -s -o /dev/null -w \"Landing: %{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(curl -s -o /dev/null -w \"Kinz viewer: %{http_code}\\\\n\" \"http://localhost:5173/?stack=kinz-modee-tender\")",
-      "Bash(curl -s \"http://localhost:5173/stacks/kinz-modee-tender/stack.json\")"
+      "Bash(curl -s \"http://localhost:5173/stacks/kinz-modee-tender/stack.json\")",
+      "Bash(git -C /Volumes/WORKSSD/Coding/kinz-document-builder status --short)",
+      "Bash(pkill -f vite)",
+      "Bash(echo \"pid=$!\")",
+      "Bash(curl -sfo /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -sfo /dev/null -w \"%{http_code}\\\\n\" 'http://localhost:5173/?stack=kinz-modee-tender')",
+      "Bash(curl -s -X POST localhost:5173/__api/stacks -H 'Content-Type: application/json' -d '{\"id\":\"test-1d-slide\",\"name\":\"Test 1d Slide\",\"template\":\"slide-16x9\"}')",
+      "Bash(curl -s -X POST localhost:5173/__api/stacks -H 'Content-Type: application/json' -d '{\"id\":\"test-1d-a4\",\"name\":\"Test 1d A4\",\"template\":\"a4\"}')",
+      "Bash(curl -s -X DELETE localhost:5173/__api/stacks/test-1d-slide)",
+      "Bash(curl -s -X DELETE localhost:5173/__api/stacks/test-1d-a4)"
     ]
   }
 }

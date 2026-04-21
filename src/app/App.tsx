@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { stacks, applyStackTheme, findDocument, canvasSize } from './stacks';
+import { stacks, applyStackTheme, applyPrintPageSize, findDocument, canvasSize } from './stacks';
 import type { LoadedStack } from './stacks';
 import { exportInfo1Merged } from './exportInfo1';
 import { Sidebar } from './components/Sidebar';
@@ -42,7 +42,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (route.view === 'landing') applyStackTheme(undefined);
+    if (route.view === 'landing') {
+      applyStackTheme(undefined);
+      applyPrintPageSize(undefined);
+    }
   }, [route]);
 
   if (route.view === 'landing') {
@@ -71,6 +74,7 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
 
   useEffect(() => {
     applyStackTheme(activeStack);
+    applyPrintPageSize(activeStack?.format);
   }, [activeStack]);
 
   const handleExport = useCallback(async (binderId: string) => {
@@ -152,7 +156,7 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
         )}
       </main>
 
-      <div className="hidden print:block">
+      <div className="hidden print:block" data-format={activeStack.format}>
         {activeStack.binders
           .find(b => b.id === printBinderId)
           ?.documents.flatMap(doc =>

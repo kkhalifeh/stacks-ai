@@ -1,9 +1,4 @@
 @media print {
-  @page {
-    size: A4 portrait;
-    margin: 0;
-  }
-
   html, body {
     margin: 0 !important;
     padding: 0 !important;
@@ -15,13 +10,21 @@
   .print-page {
     page-break-after: always;
     break-after: page;
-    width: 794px;
-    height: 1123px;
     overflow: hidden;
   }
 
   .print-page:last-child {
     page-break-after: auto;
     break-after: auto;
+  }
+
+  [data-format="a4"] .print-page {
+    width: 794px;
+    height: 1123px;
+  }
+
+  [data-format="slide-16x9"] .print-page {
+    width: 1280px;
+    height: 720px;
   }
 }
