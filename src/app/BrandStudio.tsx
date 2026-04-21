@@ -13,12 +13,15 @@ import {
   setDefaultTheme,
   tenantLogoUrl,
   updateTenant,
+  updateThemeFonts,
   uploadTenantLogo,
   type TenantBrand,
   type ThemeMeta,
   type ThemeProposal,
   type ThemeVariant,
 } from './brand-api';
+import { FontSelect } from './components/brand/FontSelect';
+import { findFontOption } from './fontCatalog';
 import { applyRawTheme, tenant as initialTenant, tenantTemplates, type TenantThemeInfo } from './stacks';
 import { ReferencesPanel } from './components/brand/ReferencesPanel';
 import { A4TitleSample } from './preview/A4TitleSample';
@@ -60,6 +63,9 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
   const [variants, setVariants] = useState<ThemeVariant[] | null>(null);
   const [activeVariantIdx, setActiveVariantIdx] = useState<number>(0);
+  /** Pending font overrides when editing a SAVED theme (no proposal active). */
+  const [savedFontOverride, setSavedFontOverride] = useState<{ heading?: string; body?: string } | null>(null);
+  const [savingFonts, setSavingFonts] = useState(false);
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(initialTenant?.activeThemeId ?? null);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -306,7 +312,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
                   return (
                     <li
                       key={t.id}
-                      onClick={() => { setSelectedThemeId(t.id); setProposal(null); }}
+                      onClick={() => { setSelectedThemeId(t.id); setProposal(null); setSavedFontOverride(null); }}
                       className="group relative px-3 py-2 cursor-pointer transition-colors"
                       style={{
                         background: isSelected ? 'var(--lx-surface-hover)' : 'var(--lx-surface)',
@@ -355,6 +361,66 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
           </div>
 
           <ReferencesPanel />
+
+          {/* Typography overrides — always visible. Controls either the live proposal or the selected saved theme. */}
+          <TypographyPanel
+            proposal={proposal}
+            onProposalFontChange={(which, family) => {
+              setProposal(p => {
+                if (!p) return p;
+                const next: ThemeProposal = {
+                  ...p,
+                  typography: {
+                    ...p.typography,
+                    ...(which === 'heading' ? { heading_font: family } : { body_font: family }),
+                  },
+                };
+                ensureGoogleFonts(googleFontsForProposal(next));
+                return next;
+              });
+            }}
+            savedThemeFonts={!proposal && selectedThemeCssFromLoader
+              ? (() => {
+                  const themeFonts = savedFontOverride ?? {};
+                  const fromCss = selectedThemeCssFromLoader
+                    ? (() => {
+                        const h = selectedThemeCssFromLoader.match(/--font-heading:\s*([^;]+);/)?.[1]?.trim();
+                        const b = selectedThemeCssFromLoader.match(/--font-body:\s*([^;]+);/)?.[1]?.trim();
+                        return { heading: h, body: b };
+                      })()
+                    : { heading: undefined as string | undefined, body: undefined as string | undefined };
+                  return {
+                    heading: themeFonts.heading ?? fromCss.heading ?? 'Inter',
+                    body: themeFonts.body ?? fromCss.body ?? 'Inter',
+                    hasPendingChanges: Boolean(savedFontOverride?.heading || savedFontOverride?.body),
+                    saving: savingFonts,
+                  };
+                })()
+              : undefined}
+            onSavedFontChange={(which, family) => {
+              setSavedFontOverride(prev => ({
+                ...prev,
+                [which]: family,
+              }));
+              ensureGoogleFonts([family].filter(f => !findFontOption(f)?.system));
+            }}
+            onSavedSave={async () => {
+              if (!selectedThemeId || !savedFontOverride) return;
+              setSavingFonts(true);
+              try {
+                await updateThemeFonts(selectedThemeId, {
+                  heading_font: savedFontOverride.heading,
+                  body_font: savedFontOverride.body,
+                });
+                // Reload to pick up the new theme CSS via the Vite glob
+                window.location.href = `/?view=brand`;
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to save fonts');
+                setSavingFonts(false);
+              }
+            }}
+            onSavedReset={() => setSavedFontOverride(null)}
+          />
 
           {/* Keywords */}
           <label className="block">
@@ -573,12 +639,16 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
             {proposal ? (
               <style>{`.${PREVIEW_SCOPE} { ${proposalToCssVars(proposal)} }`}</style>
             ) : selectedThemeCssFromLoader ? (
-              <style>{`.${PREVIEW_SCOPE} { ${extractRootVars(selectedThemeCssFromLoader)} }`}</style>
+              <style>{`.${PREVIEW_SCOPE} { ${extractRootVars(selectedThemeCssFromLoader)} ${
+                savedFontOverride?.heading ? `--font-heading: ${savedFontOverride.heading};` : ''
+              } ${
+                savedFontOverride?.body ? `--font-body: ${savedFontOverride.body};` : ''
+              } }`}</style>
             ) : null}
             <PreviewCanvas
               key={proposal
-                ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}`
-                : selectedThemeId ?? 'none'}
+                ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}-${proposal.typography.heading_font}-${proposal.typography.body_font}`
+                : `${selectedThemeId ?? 'none'}-${savedFontOverride?.heading ?? ''}-${savedFontOverride?.body ?? ''}`}
               tab={previewTab}
               brandName={name.trim() || tenantData?.name || 'Brand'}
               logoUrl={logoUrlForPreview}
@@ -651,6 +721,106 @@ function PreviewCanvas({
           <Generic brandName={brandName} logoUrl={logoUrl} />
         )}
       </div>
+    </div>
+  );
+}
+
+function TypographyPanel({
+  proposal,
+  onProposalFontChange,
+  savedThemeFonts,
+  onSavedFontChange,
+  onSavedSave,
+  onSavedReset,
+}: {
+  proposal: ThemeProposal | null;
+  onProposalFontChange: (which: 'heading' | 'body', family: string) => void;
+  savedThemeFonts?: {
+    heading: string;
+    body: string;
+    hasPendingChanges: boolean;
+    saving: boolean;
+  };
+  onSavedFontChange: (which: 'heading' | 'body', family: string) => void;
+  onSavedSave: () => void;
+  onSavedReset: () => void;
+}) {
+  if (!proposal && !savedThemeFonts) return null;
+
+  const heading = proposal?.typography.heading_font ?? savedThemeFonts?.heading ?? 'Inter';
+  const body = proposal?.typography.body_font ?? savedThemeFonts?.body ?? 'Inter';
+  const editingSaved = !proposal && !!savedThemeFonts;
+
+  return (
+    <div
+      className="p-3.5 flex flex-col gap-3"
+      style={{
+        background: 'var(--lx-surface)',
+        border: '1px solid var(--lx-border)',
+        borderRadius: 'var(--lx-radius-md)',
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium" style={{ color: 'var(--lx-text-muted)' }}>
+          Typography
+        </span>
+        {editingSaved && savedThemeFonts?.hasPendingChanges && (
+          <span className="text-[10px]" style={{ color: 'var(--lx-accent)' }}>unsaved</span>
+        )}
+      </div>
+
+      <FontSelect
+        label="Heading"
+        value={heading}
+        onChange={family => {
+          if (proposal) onProposalFontChange('heading', family);
+          else onSavedFontChange('heading', family);
+        }}
+      />
+      <FontSelect
+        label="Body"
+        value={body}
+        onChange={family => {
+          if (proposal) onProposalFontChange('body', family);
+          else onSavedFontChange('body', family);
+        }}
+      />
+
+      {editingSaved && savedThemeFonts?.hasPendingChanges && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onSavedSave}
+            disabled={savedThemeFonts.saving}
+            className="lx-focus flex-1 text-[12px] font-medium py-2 rounded-[8px] transition-colors"
+            style={{
+              background: 'var(--lx-accent)',
+              color: 'white',
+              opacity: savedThemeFonts.saving ? 0.5 : 1,
+            }}
+          >
+            {savedThemeFonts.saving ? 'Saving…' : 'Save fonts'}
+          </button>
+          <button
+            type="button"
+            onClick={onSavedReset}
+            disabled={savedThemeFonts.saving}
+            className="lx-focus text-[12px] py-2 px-3 rounded-[8px] transition-colors"
+            style={{
+              color: 'var(--lx-text-muted)',
+              border: '1px solid var(--lx-border)',
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
+      {!editingSaved && proposal && (
+        <p className="text-[10.5px]" style={{ color: 'var(--lx-text-subtle)' }}>
+          Claude picked these. Override anytime — your choice is saved with the theme.
+        </p>
+      )}
     </div>
   );
 }

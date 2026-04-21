@@ -1,0 +1,19 @@
+{
+  "id": "ppt2",
+  "name": "ppt2",
+  "subtitle": "16:9 slide deck",
+  "format": "slide-16x9",
+  "binders": [
+    {
+      "id": "deck",
+      "label": "Deck",
+      "subtitle": "",
+      "color": "var(--color-kinz-blue)",
+      "passwordProtected": false,
+      "documents": [
+        { "id": "title", "label": "Title slide", "components": ["TitleSlide"] },
+        { "id": "content", "label": "Content slide", "components": ["ContentSlide"] }
+      ]
+    }
+  ]
+}

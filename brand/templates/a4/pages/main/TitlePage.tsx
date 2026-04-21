@@ -2,7 +2,7 @@ import { useRef, type CSSProperties } from 'react';
 import { useStructural } from '@/app/useStructural';
 import logoWhite from '../../assets/logo-white.png';
 import logoDark from '../../assets/logo.png';
-import { AccentStripe } from './_AccentStripe';
+import { AccentStripe } from '@/app/components/brand/AccentStripe';
 
 export function TitlePage() {
   const ref = useRef<HTMLDivElement>(null);

@@ -130,6 +130,18 @@ export async function deleteTheme(id: string): Promise<{ deleted: string }> {
   return handle(res);
 }
 
+export async function updateThemeFonts(
+  id: string,
+  fonts: { heading_font?: string; body_font?: string },
+): Promise<{ id: string; heading_font: string; body_font: string }> {
+  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}/fonts`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fonts),
+  });
+  return handle(res);
+}
+
 export function tenantLogoUrl(cacheBust?: number): string {
   const q = cacheBust ? `?t=${cacheBust}` : '';
   return `/__api/brand/logo${q}`;
@@ -205,6 +217,17 @@ export function proposalToCssVars(p: ThemeProposal): string {
 export function extractRootVars(css: string): string {
   const match = css.match(/:root\s*\{([\s\S]*?)\}/);
   return match ? match[1].trim() : '';
+}
+
+/** Pull out the --font-heading / --font-body values from a theme CSS string. */
+export function extractThemeFonts(css: string | undefined): { heading?: string; body?: string } {
+  if (!css) return {};
+  const h = css.match(/--font-heading:\s*([^;]+);/);
+  const b = css.match(/--font-body:\s*([^;]+);/);
+  return {
+    heading: h?.[1]?.trim(),
+    body: b?.[1]?.trim(),
+  };
 }
 
 const SYSTEM_FONT_TOKENS = new Set([

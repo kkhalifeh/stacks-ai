@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useStructural } from '@/app/useStructural';
 import logo from '../../assets/logo.png';
-import { AccentStripe } from './_AccentStripe';
+import { AccentStripe } from '@/app/components/brand/AccentStripe';
 
 export function ContentPage() {
   const ref = useRef<HTMLDivElement>(null);

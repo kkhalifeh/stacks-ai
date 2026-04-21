@@ -690,6 +690,59 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               await fs.rm(themeDir, { recursive: true, force: true });
               return sendJson(res, 200, { deleted: id });
             }
+
+            // PATCH /themes/:id/fonts — update heading/body fonts in-place
+            if (sub === 'fonts' && method === 'PATCH') {
+              let body: { heading_font?: string; body_font?: string };
+              try { body = await readJsonBody(req); }
+              catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+
+              const cssPath = path.join(themeDir, 'theme.css');
+              let css = await fs.readFile(cssPath, 'utf8');
+
+              if (typeof body.heading_font === 'string' && body.heading_font.trim()) {
+                const v = body.heading_font.trim();
+                css = css.replace(/--font-heading:\s*[^;]+;/, `--font-heading: ${v};`);
+              }
+              if (typeof body.body_font === 'string' && body.body_font.trim()) {
+                const v = body.body_font.trim();
+                css = css.replace(/--font-body:\s*[^;]+;/, `--font-body: ${v};`);
+              }
+
+              // Rebuild the @import line at top for any Google fonts now in use.
+              const headMatch = css.match(/--font-heading:\s*([^;]+);/);
+              const bodyMatch = css.match(/--font-body:\s*([^;]+);/);
+              const heading = headMatch?.[1]?.trim();
+              const bodyF = bodyMatch?.[1]?.trim();
+              const hg = isGoogleFontCandidate(heading ?? '');
+              const bg = isGoogleFontCandidate(bodyF ?? '');
+              const families = [hg, bg].filter((x): x is string => Boolean(x));
+              const importUrl = googleFontImportUrl(families);
+
+              // Strip any existing @import at top, then prepend fresh.
+              css = css.replace(/^\s*@import\s+url\([^)]+\)\s*;\s*\n?/m, '');
+              if (importUrl) {
+                css = `@import url('${importUrl}');\n\n${css}`;
+              }
+
+              await fs.writeFile(cssPath, css, 'utf8');
+
+              // Update meta's modified time + description suffix (non-invasive)
+              const metaPath = path.join(themeDir, 'meta.json');
+              if (await exists(metaPath)) {
+                try {
+                  const meta = JSON.parse(await fs.readFile(metaPath, 'utf8'));
+                  meta.modifiedAt = new Date().toISOString();
+                  await fs.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n', 'utf8');
+                } catch { /* ignore */ }
+              }
+
+              return sendJson(res, 200, {
+                id,
+                heading_font: heading,
+                body_font: bodyF,
+              });
+            }
           }
 
           return next();
