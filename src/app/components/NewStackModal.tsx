@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FileText, Monitor, X } from 'lucide-react';
 import { createStack, slugify } from '../api';
 import { tenant } from '../stacks';
+import { LoadingOverlay } from './LoadingOverlay';
 
 interface NewStackModalProps {
   existingIds: string[];
@@ -9,14 +10,15 @@ interface NewStackModalProps {
   onCreated: (id: string) => void;
 }
 
+type Phase = 'idle' | 'creating' | 'opening';
+
 export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModalProps) {
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [idTouched, setIdTouched] = useState(false);
   const [format, setFormat] = useState<'a4' | 'slide-16x9'>('a4');
-  // '' means "inherit tenant default"; otherwise a saved theme id
   const [themeId, setThemeId] = useState<string>('');
-  const [submitting, setSubmitting] = useState(false);
+  const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const availableThemes = tenant?.themes ?? [];
@@ -31,19 +33,20 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && phase === 'idle') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, phase]);
 
   const idConflict = existingIds.includes(id);
-  const canSubmit = name.trim().length > 0 && id.length > 0 && !idConflict && !submitting;
+  const busy = phase !== 'idle';
+  const canSubmit = name.trim().length > 0 && id.length > 0 && !idConflict && !busy;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    setSubmitting(true);
+    setPhase('creating');
     setError(null);
     try {
       await createStack({
@@ -52,10 +55,14 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
         template: format,
         themeId: themeId || undefined,
       });
+      setPhase('opening');
+      // Give Vite's filesystem watcher + glob a beat to register the new files
+      // before we hard-reload into the stack route.
+      await new Promise(r => setTimeout(r, 500));
       onCreated(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create stack');
-      setSubmitting(false);
+      setPhase('idle');
     }
   }
 
@@ -73,8 +80,18 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
         background: 'rgba(6, 6, 8, 0.72)',
         backdropFilter: 'blur(8px)',
       }}
-      onClick={onClose}
+      onClick={() => { if (!busy) onClose(); }}
     >
+      {busy && (
+        <LoadingOverlay
+          title={phase === 'creating' ? `Creating ${name.trim() || 'stack'}` : 'Opening stack'}
+          subtitle={
+            phase === 'creating'
+              ? (format === 'slide-16x9' ? 'Setting up a new 16:9 slide deck…' : 'Setting up a new A4 document…')
+              : 'Applying theme and loading pages…'
+          }
+        />
+      )}
       <form
         onClick={e => e.stopPropagation()}
         onSubmit={handleSubmit}
@@ -83,6 +100,7 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
           background: 'var(--lx-surface-2)',
           border: '1px solid var(--lx-border-strong)',
           borderRadius: 'var(--lx-radius-lg)',
+          display: busy ? 'none' : undefined,
           boxShadow: 'var(--lx-shadow-elevated)',
         }}
       >
@@ -282,10 +300,11 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
               if (canSubmit) e.currentTarget.style.background = 'var(--lx-accent)';
             }}
           >
-            {submitting ? 'Creating…' : 'Create stack'}
+            Create stack
           </button>
         </div>
       </form>
     </div>
   );
 }
+

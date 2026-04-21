@@ -510,8 +510,8 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
           </span>
         </div>
 
-        <div className="flex-1 overflow-auto flex items-center justify-center p-10" style={{ background: 'var(--lx-bg)' }}>
-          <div className={PREVIEW_SCOPE}>
+        <div className="flex-1 overflow-auto p-10" style={{ background: 'var(--lx-bg)' }}>
+          <div className={`${PREVIEW_SCOPE} min-h-full flex items-center justify-center`}>
             {proposal ? (
               <style>{`.${PREVIEW_SCOPE} { ${proposalToCssVars(proposal)} }`}</style>
             ) : selectedThemeCssFromLoader ? (
@@ -563,7 +563,16 @@ function PreviewCanvas({
   const Generic = GENERIC_BY_TAB[tab];
 
   return (
-    <div className="relative" style={{ width: w * scale, height: h * scale }}>
+    <div
+      className="relative"
+      style={{
+        width: w * scale,
+        height: h * scale,
+        background: 'white',
+        boxShadow: 'var(--lx-shadow-elevated)',
+        borderRadius: 2,
+      }}
+    >
       <div
         className="absolute top-0 left-0"
         style={{
@@ -571,6 +580,7 @@ function PreviewCanvas({
           transformOrigin: 'top left',
           width: w,
           height: h,
+          background: 'white',
         }}
       >
         {tenantComponent ? (() => {

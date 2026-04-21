@@ -3,6 +3,7 @@ import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import type { LoadedStack } from '../stacks';
 import { canvasSize } from '../stacks';
 import { deleteStack, renameStack } from '../api';
+import { LoadingOverlay } from './LoadingOverlay';
 
 interface StackCardProps {
   stack: LoadedStack;
@@ -27,6 +28,7 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [deletePhase, setDeletePhase] = useState<'idle' | 'deleting' | 'refreshing'>('idle');
   const [hovered, setHovered] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -61,16 +63,34 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
     );
     if (!ok) return;
     setBusy(true);
+    setDeletePhase('deleting');
     try {
       await deleteStack(stack.id);
+      setDeletePhase('refreshing');
+      // Let Vite's filesystem watcher register the removal before the page reloads.
+      await new Promise(r => setTimeout(r, 400));
       onMutated();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');
       setBusy(false);
+      setDeletePhase('idle');
     }
   }
 
   return (
+    <>
+    {deletePhase !== 'idle' && (
+      <LoadingOverlay
+        title={deletePhase === 'deleting' ? `Deleting ${stack.name}` : 'Refreshing stack list'}
+        subtitle={
+          deletePhase === 'deleting'
+            ? `Removing stacks/${stack.id}/ from disk…`
+            : 'Almost there…'
+        }
+        accent="var(--lx-danger)"
+        icon={<Trash2 className="w-5 h-5" strokeWidth={1.75} />}
+      />
+    )}
     <div
       className="group relative flex flex-col overflow-hidden transition-all duration-200"
       style={{
@@ -210,5 +230,6 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
         )}
       </div>
     </div>
+    </>
   );
 }

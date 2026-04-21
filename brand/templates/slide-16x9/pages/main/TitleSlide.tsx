@@ -13,20 +13,6 @@ export function TitleSlide() {
         <div className="flex-1" style={{ background: 'var(--color-kinz-navy)' }} />
       </div>
 
-      {/* Atmospheric gradients drawn from the brand palette */}
-      <div
-        className="absolute inset-0 opacity-45"
-        style={{
-          background: 'radial-gradient(circle at 18% 30%, var(--color-kinz-blue) 0%, transparent 55%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-25"
-        style={{
-          background: 'radial-gradient(circle at 85% 80%, var(--color-kinz-red) 0%, transparent 55%)',
-        }}
-      />
-
       <div className="relative flex-1 flex flex-col px-24 pt-16 pb-12 text-white">
         <img src={logoWhite} alt="" className="h-12 w-auto object-contain self-start mb-16" />
 
