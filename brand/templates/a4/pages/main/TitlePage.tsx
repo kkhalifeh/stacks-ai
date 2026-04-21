@@ -27,12 +27,15 @@ export function TitlePage() {
     <div
       ref={ref}
       className="w-[794px] h-[1123px] flex flex-col"
-      style={{ fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
+      style={{
+        fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
+        background: onDark ? 'var(--color-dark)' : 'var(--color-light-bg)',
+      }}
     >
       <AccentStripe variant={accentStripe} height={8} />
 
       <CoverBackground variant={coverStyle}>
-        <div className="flex-1 flex flex-col p-12 relative z-10">
+        <div className="flex-1 min-h-0 flex flex-col p-12 relative z-10">
           <img src={logo} alt="" className="h-14 w-auto object-contain self-start mb-16" />
 
           <p

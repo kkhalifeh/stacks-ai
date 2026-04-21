@@ -37,8 +37,8 @@ export function CoverBackground({ variant, children, onDarkOverride }: Props) {
 
   return (
     <div
-      className="flex-1 flex flex-col relative overflow-hidden"
-      style={style}
+      className="flex-1 min-h-0 flex flex-col relative overflow-hidden"
+      style={{ ...style, flexGrow: 1, flexShrink: 1, flexBasis: 0 }}
       data-on-dark={baseDark ? 'true' : 'false'}
     >
       {children}

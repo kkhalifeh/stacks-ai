@@ -26,12 +26,15 @@ export function TitleSlide() {
     <div
       ref={ref}
       className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden"
-      style={{ fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
+      style={{
+        fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
+        background: onDark ? 'var(--color-dark)' : 'var(--color-light-bg)',
+      }}
     >
       <AccentStripe variant={accentStripe} height={8} />
 
       <CoverBackground variant={coverStyle}>
-        <div className="relative flex-1 flex flex-col px-24 pt-16 pb-12 z-10">
+        <div className="relative flex flex-col flex-1 min-h-0 px-24 pt-16 pb-12 z-10">
           <img src={logo} alt="" className="h-12 w-auto object-contain self-start mb-16" />
 
           <p
