@@ -576,6 +576,9 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
               <style>{`.${PREVIEW_SCOPE} { ${extractRootVars(selectedThemeCssFromLoader)} }`}</style>
             ) : null}
             <PreviewCanvas
+              key={proposal
+                ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}`
+                : selectedThemeId ?? 'none'}
               tab={previewTab}
               brandName={name.trim() || tenantData?.name || 'Brand'}
               logoUrl={logoUrlForPreview}
