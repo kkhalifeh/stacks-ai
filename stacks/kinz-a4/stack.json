@@ -1,0 +1,19 @@
+{
+  "id": "kinz-a4",
+  "name": "kinz a4",
+  "subtitle": "A4 document stack",
+  "format": "a4",
+  "theme": "theme/theme.css",
+  "binders": [
+    {
+      "id": "main",
+      "label": "Main",
+      "subtitle": "",
+      "color": "var(--color-primary)",
+      "passwordProtected": false,
+      "documents": [
+        { "id": "title", "label": "Title", "components": ["TitlePage"] }
+      ]
+    }
+  ]
+}

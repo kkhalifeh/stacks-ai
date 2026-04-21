@@ -21,6 +21,8 @@ interface TerminalBody {
 
 const STACKS_DIR = 'stacks';
 const TEMPLATES_DIR = 'stack-templates';
+const TENANT_TEMPLATES_DIR = 'brand/templates';
+const TENANT_BRAND_DIR = 'brand';
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ \-()]{0,200}$/;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -148,7 +150,10 @@ export function stacksApi(): Plugin {
               return sendJson(res, 400, { error: 'template must be "a4" or "slide-16x9"' });
             }
 
-            const templateDir = path.join(root, TEMPLATES_DIR, body.template);
+            // Prefer the tenant-branded template if it exists, else fall back to the generic starter.
+            const tenantTemplate = path.join(root, TENANT_TEMPLATES_DIR, body.template);
+            const genericTemplate = path.join(root, TEMPLATES_DIR, body.template);
+            const templateDir = (await exists(tenantTemplate)) ? tenantTemplate : genericTemplate;
             const targetDir = stackDir(body.id);
 
             if (!(await exists(templateDir))) {
@@ -162,6 +167,28 @@ export function stacksApi(): Plugin {
               STACK_ID: body.id,
               STACK_NAME: body.name.replace(/"/g, '\\"'),
             });
+
+            // If the template didn't bring its own assets/logo, seed from the tenant brand so
+            // relative logo imports in the template resolve out of the box.
+            const targetAssetsDir = path.join(targetDir, 'assets');
+            await fs.mkdir(targetAssetsDir, { recursive: true });
+            const targetAssetFiles = await fs.readdir(targetAssetsDir);
+            if (targetAssetFiles.length === 0) {
+              const tenantBrandDir = path.join(root, TENANT_BRAND_DIR);
+              if (await exists(tenantBrandDir)) {
+                const brandFiles = await fs.readdir(tenantBrandDir, { withFileTypes: true });
+                for (const entry of brandFiles) {
+                  if (!entry.isFile()) continue;
+                  if (/^logo\.(png|jpg|jpeg|webp|svg|gif)$/i.test(entry.name)) {
+                    await fs.copyFile(
+                      path.join(tenantBrandDir, entry.name),
+                      path.join(targetAssetsDir, entry.name),
+                    );
+                  }
+                }
+              }
+            }
+
             return sendJson(res, 201, { id: body.id });
           }
 

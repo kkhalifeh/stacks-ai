@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
+import type { FC } from 'react';
 import {
   applyTenantTheme,
   generateTenantTheme,
@@ -11,11 +12,29 @@ import {
   type TenantBrand,
   type ThemeProposal,
 } from './brand-api';
-import { applyStackTheme, tenant as initialTenant } from './stacks';
+import { applyStackTheme, tenant as initialTenant, tenantTemplates } from './stacks';
 import { A4TitleSample } from './preview/A4TitleSample';
 import { A4ContentSample } from './preview/A4ContentSample';
 import { SlideTitleSample } from './preview/SlideTitleSample';
 import { SlideContentSample } from './preview/SlideContentSample';
+
+type PreviewTab = 'a4-title' | 'a4-content' | 'slide-title' | 'slide-content';
+
+// Map each preview tab to a tenant-template component name (used when tenant templates exist)
+const TENANT_COMPONENT_BY_TAB: Record<PreviewTab, { format: 'a4' | 'slide-16x9'; name: string }> = {
+  'a4-title': { format: 'a4', name: 'TitlePage' },
+  'a4-content': { format: 'a4', name: 'ContentPage' },
+  'slide-title': { format: 'slide-16x9', name: 'TitleSlide' },
+  'slide-content': { format: 'slide-16x9', name: 'ContentSlide' },
+};
+
+// Generic fallback samples (wrapped so they accept the same brandName/logoUrl props)
+const GENERIC_BY_TAB: Record<PreviewTab, FC<{ brandName: string; logoUrl?: string }>> = {
+  'a4-title': A4TitleSample,
+  'a4-content': A4ContentSample,
+  'slide-title': SlideTitleSample,
+  'slide-content': SlideContentSample,
+};
 
 interface BrandStudioProps {
   onBack: () => void;
@@ -376,17 +395,18 @@ function PreviewCanvas({
   logoUrl,
   scale,
 }: {
-  tab: 'a4-title' | 'a4-content' | 'slide-title' | 'slide-content';
+  tab: PreviewTab;
   brandName: string;
   logoUrl?: string;
   scale: number;
 }) {
   const { w, h } = tab.startsWith('a4') ? { w: 794, h: 1123 } : { w: 1280, h: 720 };
-  const Sample =
-    tab === 'a4-title' ? A4TitleSample
-      : tab === 'a4-content' ? A4ContentSample
-        : tab === 'slide-title' ? SlideTitleSample
-          : SlideContentSample;
+
+  // Prefer the tenant template for this tab if it exists; fall back to the generic sample.
+  const tenantMapping = TENANT_COMPONENT_BY_TAB[tab];
+  const tenantComponent = tenantTemplates[tenantMapping.format]?.components[tenantMapping.name];
+  const usingTenant = Boolean(tenantComponent);
+  const Generic = GENERIC_BY_TAB[tab];
 
   return (
     <div className="relative" style={{ width: w * scale, height: h * scale }}>
@@ -399,7 +419,12 @@ function PreviewCanvas({
           height: h,
         }}
       >
-        <Sample brandName={brandName} logoUrl={logoUrl} />
+        {usingTenant ? (() => {
+          const TenantComponent = tenantComponent as FC;
+          return <TenantComponent />;
+        })() : (
+          <Generic brandName={brandName} logoUrl={logoUrl} />
+        )}
       </div>
     </div>
   );

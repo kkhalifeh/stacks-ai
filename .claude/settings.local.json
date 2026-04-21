@@ -82,7 +82,14 @@
       "Bash(curl -s -o /dev/null -w \"GET /__api/brand/logo: %{http_code}\\\\n\" http://localhost:5173/__api/brand/logo)",
       "Bash(curl -s -o /dev/null -w \"GET /?view=brand: %{http_code}\\\\n\" \"http://localhost:5173/?view=brand\")",
       "Bash(curl -s -o /dev/null -w 'POST /__api/stacks/kinz-modee-tender/brand/generate: %{http_code}\\\\n' -X POST http://localhost:5173/__api/stacks/kinz-modee-tender/brand/generate -H 'Content-Type: application/json' -d '{\"name\":\"X\"}')",
-      "Bash(curl -s -o /dev/null -w \"GET /?stack=kinz-modee-tender: %{http_code}\\\\n\" \"http://localhost:5173/?stack=kinz-modee-tender\")"
+      "Bash(curl -s -o /dev/null -w \"GET /?stack=kinz-modee-tender: %{http_code}\\\\n\" \"http://localhost:5173/?stack=kinz-modee-tender\")",
+      "Bash(curl -s -X POST http://localhost:5173/__api/stacks -H 'Content-Type: application/json' -d '{\"id\":\"verify-kinz-a4\",\"name\":\"Verify Kinz A4\",\"template\":\"a4\"}')",
+      "Bash(curl -s -X POST http://localhost:5173/__api/stacks -H 'Content-Type: application/json' -d '{\"id\":\"verify-kinz-slide\",\"name\":\"Verify Kinz Slide\",\"template\":\"slide-16x9\"}')",
+      "Bash(curl -s -o /dev/null -w \"Kinz A4: %{http_code}\\\\n\" \"http://localhost:5173/?stack=verify-kinz-a4\")",
+      "Bash(curl -s -o /dev/null -w \"Kinz Slide: %{http_code}\\\\n\" \"http://localhost:5173/?stack=verify-kinz-slide\")",
+      "Bash(curl -s -o /dev/null -w \"Brand Studio: %{http_code}\\\\n\" \"http://localhost:5173/?view=brand\")",
+      "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-kinz-a4)",
+      "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-kinz-slide)"
     ]
   }
 }

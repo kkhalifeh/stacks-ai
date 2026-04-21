@@ -123,6 +123,45 @@ function loadTenant(): LoadedTenant | undefined {
 
 export const tenant: LoadedTenant | undefined = loadTenant();
 
+// ─── TENANT TEMPLATES ──────────────────────────────────────────
+// Branded starter templates at /brand/templates/<format>/pages/**/*.tsx.
+// Used both as the default starter when creating a new stack AND as the
+// live preview in Brand Studio.
+
+const tenantTemplateModules = import.meta.glob<Record<string, FC>>(
+  '/brand/templates/*/pages/**/*.tsx',
+  { eager: true },
+);
+
+export interface TenantTemplateBundle {
+  format: StackFormat;
+  components: Record<string, FC>;
+}
+
+function tenantFormatFromPath(p: string): StackFormat | undefined {
+  const m = p.match(/^\/brand\/templates\/([^/]+)\//);
+  if (!m) return undefined;
+  const f = m[1];
+  if (f === 'a4' || f === 'slide-16x9') return f;
+  return undefined;
+}
+
+function loadTenantTemplates(): Partial<Record<StackFormat, TenantTemplateBundle>> {
+  const bundles: Partial<Record<StackFormat, TenantTemplateBundle>> = {};
+  for (const [modPath, mod] of Object.entries(tenantTemplateModules)) {
+    const format = tenantFormatFromPath(modPath);
+    if (!format) continue;
+    const entry = bundles[format] ?? { format, components: {} };
+    for (const [name, comp] of Object.entries(mod)) {
+      if (typeof comp === 'function') entry.components[name] = comp;
+    }
+    bundles[format] = entry;
+  }
+  return bundles;
+}
+
+export const tenantTemplates: Partial<Record<StackFormat, TenantTemplateBundle>> = loadTenantTemplates();
+
 function stackIdFromPath(path: string): string {
   const match = path.match(/^\/stacks\/([^/]+)\//);
   if (!match) throw new Error(`Unexpected path: ${path}`);
