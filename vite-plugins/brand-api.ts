@@ -281,9 +281,20 @@ function classifyReference(name: string): { kind: 'image' | 'document'; mediaTyp
 
 function safeReferenceName(name: string): string | null {
   const base = path.basename(name);
-  if (!REFERENCE_FILENAME_RE.test(base)) return null;
   if (!classifyReference(base)) return null;
-  return base;
+  const dot = base.lastIndexOf('.');
+  const stem = dot === -1 ? base : base.slice(0, dot);
+  const ext = dot === -1 ? '' : base.slice(dot).toLowerCase();
+  // Aggressive slug: drop any character outside [a-z0-9], preserving word boundaries with '-'.
+  // Prevents Arabic / emoji / punctuation from blowing up the filesystem layer.
+  const slug = stem
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+  const safe = (slug || 'reference') + ext;
+  return REFERENCE_FILENAME_RE.test(safe) ? safe : `reference${ext}`;
 }
 
 interface ReferenceFile {
@@ -654,14 +665,15 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
           const refRoute = rest.match(/^references\/(.+)$/);
           if (refRoute) {
             const raw = decodeURIComponent(refRoute[1]);
-            const name = safeReferenceName(raw);
-            if (!name) {
-              return sendJson(res, 400, { error: 'Invalid reference filename (allowed: letters/digits/dashes/dots/underscores/spaces, ext .png/.jpg/.jpeg/.gif/.webp/.pdf).' });
-            }
             const refsDir = path.join(brandDir, REFERENCES_SUBDIR);
-            const target = path.join(refsDir, name);
 
             if (method === 'POST') {
+              // Upload: sanitize to a safe filename (slugify unicode, preserve extension).
+              const name = safeReferenceName(raw);
+              if (!name) {
+                return sendJson(res, 400, { error: 'Unsupported file type (allowed: .png/.jpg/.jpeg/.gif/.webp/.pdf).' });
+              }
+              const target = path.join(refsDir, name);
               await fs.mkdir(refsDir, { recursive: true });
               try {
                 const body = await readBinaryBody(req, MAX_UPLOAD_BYTES);
@@ -674,9 +686,16 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             }
 
             if (method === 'DELETE') {
+              // Delete: use the raw filename as-is (basename strip for traversal safety) so
+              // legacy filenames with spaces/capitals/punctuation remain removable.
+              const bare = path.basename(raw);
+              if (!bare || bare === '.' || bare === '..') {
+                return sendJson(res, 400, { error: 'Invalid filename' });
+              }
+              const target = path.join(refsDir, bare);
               if (!(await exists(target))) return sendJson(res, 404, { error: 'Reference not found' });
               await fs.rm(target, { force: true });
-              return sendJson(res, 200, { deleted: name });
+              return sendJson(res, 200, { deleted: bare });
             }
           }
 
