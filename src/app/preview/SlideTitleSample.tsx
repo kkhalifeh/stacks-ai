@@ -1,4 +1,6 @@
-import { Canvas } from '../components/Canvas';
+import { useRef, type CSSProperties } from 'react';
+import { useStructural } from '../useStructural';
+import { AccentStripe } from '../components/brand/AccentStripe';
 
 interface Props {
   brandName: string;
@@ -6,43 +8,95 @@ interface Props {
 }
 
 export function SlideTitleSample({ brandName, logoUrl }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { coverStyle, accentStripe, titleEmphasis } = useStructural(ref);
+
+  const DARK = 'var(--color-dark, #1B2332)';
+  const DARK_SURFACE = 'var(--color-dark-surface, #232B3B)';
+  const LIGHT = 'var(--color-light-bg, #F5F7FA)';
+  const PRIMARY = 'var(--color-primary, #1976D2)';
+
+  const onDark = coverStyle !== 'solid-light';
+  const textColor = onDark ? '#ffffff' : 'var(--color-text, #1B2332)';
+  const subtleColor = onDark ? 'rgba(255,255,255,0.7)' : 'var(--color-text-muted, rgba(27,35,50,0.65))';
+  const faintColor = onDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+
+  let coverBg: CSSProperties['background'] = DARK;
+  if (coverStyle === 'solid-light') coverBg = LIGHT;
+  else if (coverStyle === 'gradient-radial')
+    coverBg = `radial-gradient(circle at 18% 30%, ${PRIMARY} 0%, ${DARK} 55%), ${DARK}`;
+  else if (coverStyle === 'gradient-linear')
+    coverBg = `linear-gradient(135deg, ${PRIMARY} 0%, ${DARK} 70%, ${DARK_SURFACE} 100%)`;
+  else if (coverStyle === 'split')
+    coverBg = `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY} 42%, ${DARK} 42%, ${DARK} 100%)`;
+  else if (coverStyle === 'image-led')
+    coverBg = `linear-gradient(180deg, rgba(0,0,0,0.25) 0%, ${DARK} 70%)`;
+
+  const titleClass =
+    titleEmphasis === 'display-eyebrow'
+      ? 'text-6xl font-bold leading-[1.02] max-w-3xl'
+      : titleEmphasis === 'stacked-labels'
+        ? 'text-4xl font-bold leading-[1.05] max-w-3xl'
+        : 'text-5xl font-bold leading-[1.05] max-w-3xl';
+
   return (
-    <Canvas
-      format="slide-16x9"
-      className="relative overflow-hidden"
-      style={{ background: 'var(--color-dark)', fontFamily: 'var(--font-body)' }}
+    <div
+      ref={ref}
+      className="flex flex-col relative overflow-hidden"
+      style={{
+        width: 1280,
+        height: 720,
+        fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
+        background: coverBg,
+      }}
     >
-      <div
-        className="absolute inset-0 opacity-50"
-        style={{
-          background: 'radial-gradient(circle at 18% 30%, var(--color-primary) 0%, transparent 55%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-35"
-        style={{
-          background: 'radial-gradient(circle at 88% 85%, var(--color-accent-1) 0%, transparent 50%)',
-        }}
-      />
+      <AccentStripe variant={accentStripe} height={8} />
 
-      <div className="relative flex-1 flex flex-col justify-center px-24 text-white">
-        {logoUrl && <img src={logoUrl} alt="" className="h-12 mb-10 object-contain opacity-90" style={{ width: 'auto' }} />}
-        <div className="h-1 w-20 mb-8 rounded-full" style={{ background: 'var(--color-primary-light)' }} />
-        <h1
-          className="text-6xl font-bold tracking-tight mb-5 leading-[1.05]"
-          style={{ fontFamily: 'var(--font-heading)' }}
+      <div
+        className="relative flex flex-col px-24 pt-16 pb-12 z-10"
+        style={{ flex: '1 1 0%', minHeight: 0, height: '100%' }}
+      >
+        {logoUrl && <img src={logoUrl} alt="" className="h-12 w-auto object-contain self-start mb-16" />}
+
+        <p
+          className="text-sm font-medium tracking-[0.3em] uppercase mb-6"
+          style={{
+            color: onDark ? 'var(--color-primary-light, #42A5F5)' : 'var(--color-primary, #1976D2)',
+            fontFamily: 'var(--font-body, inherit)',
+          }}
         >
-          {brandName}
-        </h1>
-        <p className="text-xl text-white/60 max-w-2xl" style={{ fontFamily: 'var(--font-body)' }}>
-          16:9 title slide sample — shows the cover treatment at landscape scale.
+          {titleEmphasis === 'stacked-labels' ? 'Presentation · Brand · Overview' : 'Presentation'}
         </p>
-      </div>
 
-      <div className="relative px-24 pb-10 flex justify-between items-center text-xs text-white/45">
-        <span>{brandName}</span>
-        <span>1 / 1</span>
+        <h1
+          className={titleClass}
+          style={{ color: textColor, fontFamily: 'var(--font-heading, inherit)' }}
+        >
+          Presentation Title
+        </h1>
+
+        {accentStripe !== 'none' && (
+          <div className="flex gap-1.5 my-6">
+            <div className="h-1 w-10 rounded-full" style={{ background: PRIMARY }} />
+            <div className="h-1 w-6 rounded-full" style={{ background: 'var(--color-accent-3, var(--color-primary-light, #42A5F5))' }} />
+            <div className="h-1 w-3 rounded-full" style={{ background: 'var(--color-accent-2, var(--color-primary, #1976D2))' }} />
+          </div>
+        )}
+
+        <p className="text-lg max-w-xl mb-1" style={{ color: subtleColor }}>Subtitle goes here</p>
+        <p className="text-sm max-w-lg" style={{ color: faintColor }}>One-line descriptor.</p>
+
+        <div className="mt-auto flex justify-between items-end text-xs">
+          <div>
+            <p className="text-[10px] mb-1 uppercase tracking-wider" style={{ color: faintColor }}>Presented by</p>
+            <p style={{ color: subtleColor }}>{brandName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] mb-1 uppercase tracking-wider" style={{ color: faintColor }}>Date</p>
+            <p style={{ color: subtleColor }}>Month Year</p>
+          </div>
+        </div>
       </div>
-    </Canvas>
+    </div>
   );
 }

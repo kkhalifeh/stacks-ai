@@ -1,4 +1,6 @@
-import { Canvas } from '../components/Canvas';
+import { useRef } from 'react';
+import { useStructural } from '../useStructural';
+import { AccentStripe } from '../components/brand/AccentStripe';
 
 interface Props {
   brandName: string;
@@ -6,67 +8,90 @@ interface Props {
 }
 
 export function SlideContentSample({ brandName, logoUrl }: Props) {
-  return (
-    <Canvas
-      format="slide-16x9"
-      className="relative overflow-hidden"
-      style={{ background: 'var(--color-light-bg)', fontFamily: 'var(--font-body)' }}
-    >
-      <div className="flex h-1.5 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-accent-1)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-2)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-3)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-4)' }} />
-      </div>
+  const ref = useRef<HTMLDivElement>(null);
+  const { accentStripe, contentGrid } = useStructural(ref);
+  const cols = contentGrid === 'single-column' ? 1 : contentGrid === 'two-column' ? 2 : 3;
+  const cards = [
+    { n: '01', title: 'First pillar', accent: 'var(--color-accent-1, var(--color-primary, #1976D2))' },
+    { n: '02', title: 'Second pillar', accent: 'var(--color-primary, #1976D2)' },
+    { n: '03', title: 'Third pillar', accent: 'var(--color-accent-3, var(--color-primary-light, #42A5F5))' },
+  ].slice(0, cols);
 
-      <div className="flex-1 flex flex-col px-20 py-12" style={{ color: 'var(--color-text)' }}>
-        <div className="flex items-center justify-between mb-8">
+  return (
+    <div
+      ref={ref}
+      className="flex flex-col relative overflow-hidden"
+      style={{
+        width: 1280,
+        height: 720,
+        background: 'white',
+        fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
+      }}
+    >
+      <AccentStripe variant={accentStripe} height={6} />
+
+      <div className="flex-1 px-20 pt-10 pb-10 flex flex-col" style={{ color: 'var(--color-text, #1B2332)' }}>
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="h-6 object-contain opacity-70" style={{ width: 'auto' }} />}
-            <p className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--color-text-muted)' }}>
-              Section 02
-            </p>
+            {logoUrl && <img src={logoUrl} alt="" className="w-7 h-7 object-contain opacity-40" />}
+            <span
+              className="text-[10px] px-2 py-1 font-semibold tracking-wide uppercase"
+              style={{ background: 'var(--color-primary, #1976D2)', color: 'white', borderRadius: 'var(--radius-sm, 6px)' }}
+            >
+              Section 01
+            </span>
           </div>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{brandName}</p>
+          <p className="text-xs" style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))' }}>{brandName}</p>
         </div>
 
-        <h2 className="text-4xl font-bold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>
-          Value Pillars
-        </h2>
-        <p className="text-base mb-10 max-w-3xl" style={{ color: 'var(--color-text-muted)' }}>
-          A content slide with three columns shows how the palette plays across a layout with multiple accents.
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-1.5 h-8 rounded-full" style={{ background: 'var(--color-primary, #1976D2)' }} />
+          <h2
+            className="text-3xl font-bold"
+            style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}
+          >
+            Slide Heading
+          </h2>
+        </div>
+        <p className="text-[15px] max-w-3xl mb-8" style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))' }}>
+          One-paragraph intro that frames the point of this slide.
         </p>
 
-        <div className="grid grid-cols-3 gap-6 flex-1">
-          {[
-            { n: '01', title: 'Brand clarity', accent: 'var(--color-primary)' },
-            { n: '02', title: 'Consistent tone', accent: 'var(--color-accent-2)' },
-            { n: '03', title: 'Fast output', accent: 'var(--color-accent-3)' },
-          ].map(p => (
+        <div className="grid gap-5 flex-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {cards.map(card => (
             <div
-              key={p.n}
+              key={card.n}
               className="p-6 flex flex-col"
               style={{
-                background: 'white',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-resting)',
+                background: 'var(--color-light-bg, #F5F7FA)',
+                borderLeft: `4px solid ${card.accent}`,
+                borderRadius: 'var(--radius-lg, 14px)',
               }}
             >
-              <div className="h-1 w-10 mb-6 rounded-full" style={{ background: p.accent }} />
-              <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>
-                {p.n}
+              <p className="text-xs uppercase tracking-widest font-semibold mb-3" style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))' }}>
+                {card.n}
               </p>
-              <h3 className="text-xl font-semibold mb-3" style={{ fontFamily: 'var(--font-heading)' }}>
-                {p.title}
+              <h3
+                className="text-lg font-bold mb-2"
+                style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}
+              >
+                {card.title}
               </h3>
-              <p className="text-sm flex-1" style={{ color: 'var(--color-text-muted)' }}>
-                Short supporting description rendered in body text.
+              <p className="text-[12px] leading-[1.6] flex-1" style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))' }}>
+                Short supporting description.
               </p>
             </div>
           ))}
         </div>
+
+        <div
+          className="pt-3 mt-6 flex justify-between items-center text-xs border-t"
+          style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))', borderColor: 'var(--color-border, rgba(0,0,0,0.1))' }}
+        >
+          <span>{brandName}</span>
+          <span>Deck · Slide 2</span>
+        </div>
       </div>
-    </Canvas>
+    </div>
   );
 }

@@ -74,7 +74,14 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
   /** Pending font overrides when editing a SAVED theme (no proposal active). */
   const [savedFontOverride, setSavedFontOverride] = useState<{ heading?: string; body?: string } | null>(null);
   const [savingFonts, setSavingFonts] = useState(false);
-  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(loadedBrand?.activeThemeId ?? null);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(() => {
+    // Priority: ?theme=<id> URL param (right after save) → brand active → first saved theme → null
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('theme');
+      if (q && loadedBrand?.themes.some(t => t.id === q)) return q;
+    }
+    return loadedBrand?.activeThemeId ?? loadedBrand?.themes[0]?.id ?? null;
+  });
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

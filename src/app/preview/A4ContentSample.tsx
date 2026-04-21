@@ -1,4 +1,6 @@
-import { Canvas } from '../components/Canvas';
+import { useRef } from 'react';
+import { useStructural } from '../useStructural';
+import { AccentStripe } from '../components/brand/AccentStripe';
 
 interface Props {
   brandName: string;
@@ -6,81 +8,103 @@ interface Props {
 }
 
 export function A4ContentSample({ brandName, logoUrl }: Props) {
-  return (
-    <Canvas format="a4">
-      <div className="flex h-1.5 flex-shrink-0">
-        <div className="flex-1" style={{ background: 'var(--color-accent-1)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-2)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-3)' }} />
-        <div className="flex-1" style={{ background: 'var(--color-accent-4)' }} />
-      </div>
+  const ref = useRef<HTMLDivElement>(null);
+  const { accentStripe, contentGrid } = useStructural(ref);
 
-      <div className="flex-1 px-12 pt-8 pb-5 flex flex-col"
-        style={{ fontFamily: 'var(--font-body)', color: 'var(--color-text)' }}>
+  const cols = contentGrid === 'three-column-cards' ? 3 : contentGrid === 'two-column' ? 2 : 1;
+
+  return (
+    <div
+      ref={ref}
+      className="flex flex-col relative"
+      style={{ width: 794, height: 1123, fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)', background: 'white' }}
+    >
+      <AccentStripe variant={accentStripe} height={6} />
+
+      <div
+        className="px-12 pt-8 pb-5 flex flex-col"
+        style={{ flex: '1 1 0%', minHeight: 0, height: '100%' }}
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="w-7 h-7 opacity-50 object-contain" />}
+            {logoUrl && <img src={logoUrl} alt="" className="w-7 h-7 object-contain opacity-40" />}
             <h1
               className="text-xl font-bold"
-              style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-text)' }}
+              style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}
             >
-              Overview
+              Section Title
             </h1>
           </div>
           <span
             className="text-[10px] px-2 py-1 font-semibold tracking-wide uppercase"
-            style={{ background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-sm)' }}
+            style={{
+              background: 'var(--color-primary, #1976D2)',
+              color: 'white',
+              borderRadius: 'var(--radius-sm, 6px)',
+            }}
           >
             Section
           </span>
         </div>
-        <div className="h-px mb-5" style={{ background: 'var(--color-border)' }} />
+        <div className="h-px mb-5" style={{ background: 'var(--color-border, rgba(0,0,0,0.1))' }} />
 
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-5 rounded-full" style={{ background: 'var(--color-primary)' }} />
-          <h2 className="text-base font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-heading)' }}>
-            Executive Summary
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1 h-5 rounded-full" style={{ background: 'var(--color-primary, #1976D2)' }} />
+          <h2
+            className="text-base font-bold"
+            style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}
+          >
+            A. Heading
           </h2>
         </div>
-        <p className="text-[13px] leading-[1.75] mb-4" style={{ color: 'var(--color-text)' }}>
-          This is a paragraph of sample body text showing how typography and color contrast read at A4 document scale.
-          Headings, subheadings, list items, and accent callouts will all follow this brand's palette when applied to
-          real pages.
+
+        <p className="text-[13px] leading-[1.7] mb-4" style={{ color: 'var(--color-text, #1B2332)' }}>
+          Body copy for the section. Replace this paragraph with the actual narrative content. Keep
+          sentences tight; this page reads like senior consulting writing.
         </p>
 
         <div
-          className="p-4 mb-4"
-          style={{
-            background: 'var(--color-light-bg)',
-            borderLeft: `4px solid var(--color-primary)`,
-            borderRadius: 'var(--radius-md)',
-          }}
+          className="grid gap-4 mb-4"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
-          <p className="text-[12px] font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-            Callout
-          </p>
-          <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            A subtle accent callout uses the primary color for emphasis without overwhelming the page.
-          </p>
+          {[
+            { title: 'Point one', color: 'var(--color-accent-1, var(--color-primary, #1976D2))' },
+            { title: 'Point two', color: 'var(--color-primary, #1976D2)' },
+            { title: 'Point three', color: 'var(--color-accent-3, var(--color-primary-light, #42A5F5))' },
+          ].slice(0, cols).map(card => (
+            <div
+              key={card.title}
+              className="p-4 flex flex-col"
+              style={{
+                background: 'var(--color-light-bg, #F5F7FA)',
+                borderLeft: `4px solid ${card.color}`,
+                borderRadius: 'var(--radius-md, 10px)',
+              }}
+            >
+              <h3
+                className="text-sm font-bold mb-2"
+                style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}
+              >
+                {card.title}
+              </h3>
+              <p className="text-[12px] leading-[1.6]" style={{ color: 'var(--color-text-muted, rgba(0,0,0,0.6))' }}>
+                Short supporting detail that explains the point.
+              </p>
+            </div>
+          ))}
         </div>
 
         <div
-          className="p-4 text-[13px]"
+          className="pt-3 mt-auto flex justify-between items-center text-xs border-t"
           style={{
-            background: 'var(--color-primary)',
-            color: 'white',
-            borderRadius: 'var(--radius-md)',
+            color: 'var(--color-text-muted, rgba(0,0,0,0.6))',
+            borderColor: 'var(--color-border, rgba(0,0,0,0.1))',
           }}
         >
-          <strong>Relevance:</strong> A bolder callout for the most important point on the page.
-        </div>
-
-        <div className="pt-3 mt-auto flex justify-between items-center text-xs border-t"
-          style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border)' }}>
           <span>{brandName}</span>
-          <span>Page 1</span>
+          <span>Section · Page 1</span>
         </div>
       </div>
-    </Canvas>
+    </div>
   );
 }
