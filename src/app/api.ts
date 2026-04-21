@@ -2,6 +2,8 @@ export interface CreateStackInput {
   id: string;
   name: string;
   template: 'a4' | 'slide-16x9';
+  /** Optional: tenant theme id to snapshot into the new stack. If omitted, stack inherits active tenant theme. */
+  themeId?: string;
 }
 
 export interface KbFile {

@@ -89,7 +89,10 @@
       "Bash(curl -s -o /dev/null -w \"Kinz Slide: %{http_code}\\\\n\" \"http://localhost:5173/?stack=verify-kinz-slide\")",
       "Bash(curl -s -o /dev/null -w \"Brand Studio: %{http_code}\\\\n\" \"http://localhost:5173/?view=brand\")",
       "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-kinz-a4)",
-      "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-kinz-slide)"
+      "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-kinz-slide)",
+      "Bash(curl -s -X POST http://localhost:5173/__api/stacks -H 'Content-Type: application/json' -d '{\"id\":\"verify-theme-pick\",\"name\":\"Verify Theme Pick\",\"template\":\"a4\",\"themeId\":\"kinz-dark-test\"}')",
+      "Bash(curl -s -X DELETE http://localhost:5173/__api/stacks/verify-theme-pick)",
+      "Bash(curl -s -X DELETE http://localhost:5173/__api/brand/themes/kinz-dark-test)"
     ]
   }
 }

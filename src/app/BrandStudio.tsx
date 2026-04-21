@@ -1,26 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
 import type { FC } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, Check, Image as ImageIcon, Sparkles, Star, Trash2, Upload } from 'lucide-react';
 import {
-  applyTenantTheme,
+  deleteTheme,
+  extractRootVars,
   generateTenantTheme,
   getTenant,
   proposalToCssVars,
+  saveTheme,
+  setDefaultTheme,
   tenantLogoUrl,
   updateTenant,
   uploadTenantLogo,
   type TenantBrand,
+  type ThemeMeta,
   type ThemeProposal,
 } from './brand-api';
-import { applyStackTheme, tenant as initialTenant, tenantTemplates } from './stacks';
+import { applyRawTheme, tenant as initialTenant, tenantTemplates, type TenantThemeInfo } from './stacks';
 import { A4TitleSample } from './preview/A4TitleSample';
 import { A4ContentSample } from './preview/A4ContentSample';
 import { SlideTitleSample } from './preview/SlideTitleSample';
 import { SlideContentSample } from './preview/SlideContentSample';
 
+interface BrandStudioProps {
+  onBack: () => void;
+}
+
 type PreviewTab = 'a4-title' | 'a4-content' | 'slide-title' | 'slide-content';
 
-// Map each preview tab to a tenant-template component name (used when tenant templates exist)
 const TENANT_COMPONENT_BY_TAB: Record<PreviewTab, { format: 'a4' | 'slide-16x9'; name: string }> = {
   'a4-title': { format: 'a4', name: 'TitlePage' },
   'a4-content': { format: 'a4', name: 'ContentPage' },
@@ -28,17 +35,12 @@ const TENANT_COMPONENT_BY_TAB: Record<PreviewTab, { format: 'a4' | 'slide-16x9';
   'slide-content': { format: 'slide-16x9', name: 'ContentSlide' },
 };
 
-// Generic fallback samples (wrapped so they accept the same brandName/logoUrl props)
 const GENERIC_BY_TAB: Record<PreviewTab, FC<{ brandName: string; logoUrl?: string }>> = {
   'a4-title': A4TitleSample,
   'a4-content': A4ContentSample,
   'slide-title': SlideTitleSample,
   'slide-content': SlideContentSample,
 };
-
-interface BrandStudioProps {
-  onBack: () => void;
-}
 
 const PREVIEW_SCALE_A4 = 0.5;
 const PREVIEW_SCALE_SLIDE = 0.45;
@@ -52,28 +54,42 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
   const [logoVersion, setLogoVersion] = useState(0);
   const [hasLogo, setHasLogo] = useState(Boolean(initialTenant?.logoUrl));
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(initialTenant?.activeThemeId ?? null);
   const [generating, setGenerating] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewTab, setPreviewTab] = useState<'a4-title' | 'a4-content' | 'slide-title' | 'slide-content'>('a4-title');
+  const [previewTab, setPreviewTab] = useState<PreviewTab>('a4-title');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Clear any active stack theme while in Brand Studio so preview isn't polluted
-  useEffect(() => { applyStackTheme(undefined); }, []);
+  const initialThemesFromLoader = useMemo<TenantThemeInfo[]>(() => initialTenant?.themes ?? [], []);
+  const selectedThemeCssFromLoader = useMemo(() => {
+    return initialThemesFromLoader.find(t => t.id === selectedThemeId)?.themeCss;
+  }, [initialThemesFromLoader, selectedThemeId]);
 
-  // Initial load: pull tenant metadata from server
+  // Make sure the right theme CSS is applied while we're in Brand Studio so the preview renders.
   useEffect(() => {
-    (async () => {
-      try {
-        const t = await getTenant();
-        setTenantData(t);
-        setName(t.name);
-        setHasLogo(Boolean(t.logo));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load tenant brand');
-      }
-    })();
-  }, []);
+    if (proposal) {
+      // Proposal is active — clear the global theme; .brand-preview-tenant scope holds the proposal vars.
+      applyRawTheme(undefined);
+    } else {
+      applyRawTheme(selectedThemeCssFromLoader);
+    }
+  }, [proposal, selectedThemeCssFromLoader]);
+
+  // Initial fetch of server-side tenant state (for up-to-date themes list after saves/deletes elsewhere)
+  const refreshTenant = useCallback(async () => {
+    try {
+      const t = await getTenant();
+      setTenantData(t);
+      if (!name) setName(t.name);
+      setHasLogo(Boolean(t.logo));
+      if (!selectedThemeId && t.activeThemeId) setSelectedThemeId(t.activeThemeId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tenant brand');
+    }
+  }, [name, selectedThemeId]);
+
+  useEffect(() => { refreshTenant(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpload = useCallback(async (file: File) => {
     setError(null);
@@ -90,8 +106,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
     setError(null);
     setGenerating(true);
     try {
-      // Persist name first if changed
-      if (tenantData && name !== tenantData.name) {
+      if (tenantData && name && name !== tenantData.name) {
         await updateTenant({ name: name.trim() });
       }
       const { proposal } = await generateTenantTheme({
@@ -108,24 +123,51 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
     }
   }
 
-  async function handleApply() {
+  async function handleSaveTheme(setAsDefault: boolean) {
     if (!proposal) return;
-    setApplying(true);
+    const defaultName = `${tenantData?.name ?? 'Brand'} v${(tenantData?.themes.length ?? 0) + 1}`;
+    const name = window.prompt('Save theme as', defaultName);
+    if (!name) return;
+    setSaving(true);
+    setError(null);
     try {
-      await applyTenantTheme(proposal);
-      // Full reload to re-read brand/theme.css via the Vite glob
-      window.location.href = `/`;
+      const saved = await saveTheme({ name: name.trim(), proposal, setDefault: setAsDefault });
+      // Reload to pick up the new theme through the Vite glob
+      window.location.href = `/?view=brand&theme=${encodeURIComponent(saved.id)}`;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Apply failed');
-      setApplying(false);
+      setError(err instanceof Error ? err.message : 'Save failed');
+      setSaving(false);
+    }
+  }
+
+  async function handleSetDefault(id: string) {
+    try {
+      await setDefaultTheme(id);
+      await refreshTenant();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set default');
+    }
+  }
+
+  async function handleDeleteTheme(id: string, themeName: string) {
+    const ok = window.confirm(`Delete theme "${themeName}"?`);
+    if (!ok) return;
+    try {
+      await deleteTheme(id);
+      window.location.href = '/?view=brand';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
     }
   }
 
   const logoUrlForPreview = hasLogo ? tenantLogoUrl(logoVersion) : initialTenant?.logoUrl;
+  const themes = tenantData?.themes ?? initialThemesFromLoader.map(t => ({
+    id: t.id, name: t.name, description: t.description, createdAt: t.createdAt,
+  }));
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--lx-bg)', color: 'var(--lx-text)' }}>
-      {/* LEFT: controls */}
+      {/* LEFT: tenant controls + themes list */}
       <aside
         className="w-[380px] flex-shrink-0 flex flex-col border-r overflow-y-auto"
         style={{ borderColor: 'var(--lx-border)' }}
@@ -143,7 +185,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
           </button>
           <h1 className="text-[17px] font-semibold tracking-tight">Brand Studio</h1>
           <p className="text-[12px] mt-1" style={{ color: 'var(--lx-text-muted)' }}>
-            Tenant-wide brand. Applies to every stack unless a stack overrides it.
+            Tenant-wide brand. Saved themes become options when creating new stacks.
           </p>
         </div>
 
@@ -201,7 +243,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
             </button>
           </div>
 
-          {/* Name */}
+          {/* Brand name */}
           <label className="block">
             <span className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--lx-text-muted)' }}>
               Brand name
@@ -220,6 +262,84 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
               }}
             />
           </label>
+
+          {/* Saved themes list */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="block text-[11px] font-medium" style={{ color: 'var(--lx-text-muted)' }}>
+                Saved themes
+              </span>
+              <span className="text-[10px]" style={{ color: 'var(--lx-text-faint)' }}>
+                {themes.length}
+              </span>
+            </div>
+            {themes.length === 0 ? (
+              <div
+                className="text-[11.5px] leading-relaxed px-3 py-2.5"
+                style={{
+                  background: 'var(--lx-surface)',
+                  border: '1px dashed var(--lx-border)',
+                  borderRadius: 'var(--lx-radius-md)',
+                  color: 'var(--lx-text-muted)',
+                }}
+              >
+                No themes yet. Upload a logo and generate your first.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {themes.map(t => {
+                  const isActive = t.id === (tenantData?.activeThemeId ?? initialTenant?.activeThemeId);
+                  const isSelected = t.id === selectedThemeId && !proposal;
+                  return (
+                    <li
+                      key={t.id}
+                      onClick={() => { setSelectedThemeId(t.id); setProposal(null); }}
+                      className="group relative px-3 py-2 cursor-pointer transition-colors"
+                      style={{
+                        background: isSelected ? 'var(--lx-surface-hover)' : 'var(--lx-surface)',
+                        border: `1px solid ${isSelected ? 'var(--lx-border-strong)' : 'var(--lx-border)'}`,
+                        borderRadius: 'var(--lx-radius-md)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-medium flex-1 truncate" style={{ color: 'var(--lx-text)' }}>
+                          {t.name}
+                        </span>
+                        {isActive && (
+                          <Star className="w-3 h-3" style={{ color: 'var(--lx-accent)', fill: 'var(--lx-accent)' }} />
+                        )}
+                      </div>
+                      {t.description && (
+                        <p className="text-[10.5px] mt-1 line-clamp-2" style={{ color: 'var(--lx-text-subtle)' }}>
+                          {t.description}
+                        </p>
+                      )}
+                      <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {!isActive && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleSetDefault(t.id); }}
+                            className="text-[10px] px-2 py-1 rounded-[6px] transition-colors"
+                            style={{ background: 'var(--lx-surface-2)', color: 'var(--lx-text-muted)' }}
+                          >
+                            Set default
+                          </button>
+                        )}
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteTheme(t.id, t.name); }}
+                          className="text-[10px] px-2 py-1 rounded-[6px] transition-colors flex items-center gap-1"
+                          style={{ color: 'var(--lx-danger)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-danger-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Trash2 className="w-2.5 h-2.5" /> Delete
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
           {/* Keywords */}
           <label className="block">
@@ -250,7 +370,7 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
               <textarea
                 value={feedback}
                 onChange={e => setFeedback(e.target.value)}
-                placeholder="e.g. darker primary, warmer accents, more neutral"
+                placeholder="e.g. darker primary, warmer accents"
                 rows={2}
                 className="lx-focus w-full text-[13px] px-3 py-2 transition-colors resize-none"
                 style={{
@@ -276,14 +396,8 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
             }}
           >
             <Sparkles className="w-4 h-4" />
-            {generating ? 'Generating…' : proposal ? 'Regenerate' : 'Generate theme'}
+            {generating ? 'Generating…' : proposal ? 'Regenerate' : 'Generate new theme'}
           </button>
-
-          {!hasLogo && (
-            <p className="text-[11px]" style={{ color: 'var(--lx-text-subtle)' }}>
-              Upload a logo to enable generation. Existing palette still shows in preview.
-            </p>
-          )}
 
           {error && (
             <div
@@ -315,19 +429,54 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
 
               <PaletteSwatches proposal={proposal} />
 
-              <button
-                onClick={handleApply}
-                disabled={applying}
-                className="lx-focus flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] font-semibold transition-colors"
-                style={{
-                  background: 'var(--lx-accent)',
-                  color: 'white',
-                  borderRadius: 'var(--lx-radius-md)',
-                  opacity: applying ? 0.5 : 1,
-                }}
-              >
-                {applying ? 'Applying…' : 'Apply to all stacks'}
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => handleSaveTheme(false)}
+                  disabled={saving}
+                  className="lx-focus flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] font-semibold transition-colors"
+                  style={{
+                    background: 'var(--lx-accent)',
+                    color: 'white',
+                    borderRadius: 'var(--lx-radius-md)',
+                    opacity: saving ? 0.5 : 1,
+                  }}
+                >
+                  <Check className="w-4 h-4" /> Save as new theme
+                </button>
+                <button
+                  onClick={() => handleSaveTheme(true)}
+                  disabled={saving}
+                  className="lx-focus flex items-center justify-center gap-2 px-4 py-2 text-[12px] transition-colors"
+                  style={{
+                    background: 'transparent',
+                    color: 'var(--lx-text-muted)',
+                    border: '1px solid var(--lx-border)',
+                    borderRadius: 'var(--lx-radius-md)',
+                    opacity: saving ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => {
+                    if (!saving) {
+                      e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                      e.currentTarget.style.color = 'var(--lx-text)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!saving) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--lx-text-muted)';
+                    }
+                  }}
+                >
+                  Save &amp; set as default
+                </button>
+                <button
+                  onClick={() => setProposal(null)}
+                  className="text-[11px] py-1.5 transition-colors"
+                  style={{ color: 'var(--lx-text-subtle)' }}
+                >
+                  Discard proposal
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -349,17 +498,22 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
             <TabBtn label="Slide Title" active={previewTab === 'slide-title'} onClick={() => setPreviewTab('slide-title')} />
             <TabBtn label="Slide Content" active={previewTab === 'slide-content'} onClick={() => setPreviewTab('slide-content')} />
           </div>
-
           <span className="ml-auto text-[11px]" style={{ color: 'var(--lx-text-faint)' }}>
-            {proposal ? 'Showing proposal' : tenantData?.hasTheme ? 'Showing current tenant brand' : 'No brand set yet'}
+            {proposal
+              ? 'Showing unsaved proposal'
+              : selectedThemeId
+                ? `Showing ${initialThemesFromLoader.find(t => t.id === selectedThemeId)?.name ?? selectedThemeId}`
+                : 'No theme selected'}
           </span>
         </div>
 
         <div className="flex-1 overflow-auto flex items-center justify-center p-10" style={{ background: 'var(--lx-bg)' }}>
           <div className={PREVIEW_SCOPE}>
-            {proposal && (
+            {proposal ? (
               <style>{`.${PREVIEW_SCOPE} { ${proposalToCssVars(proposal)} }`}</style>
-            )}
+            ) : selectedThemeCssFromLoader ? (
+              <style>{`.${PREVIEW_SCOPE} { ${extractRootVars(selectedThemeCssFromLoader)} }`}</style>
+            ) : null}
             <PreviewCanvas
               tab={previewTab}
               brandName={name.trim() || tenantData?.name || 'Brand'}
@@ -401,11 +555,8 @@ function PreviewCanvas({
   scale: number;
 }) {
   const { w, h } = tab.startsWith('a4') ? { w: 794, h: 1123 } : { w: 1280, h: 720 };
-
-  // Prefer the tenant template for this tab if it exists; fall back to the generic sample.
   const tenantMapping = TENANT_COMPONENT_BY_TAB[tab];
   const tenantComponent = tenantTemplates[tenantMapping.format]?.components[tenantMapping.name];
-  const usingTenant = Boolean(tenantComponent);
   const Generic = GENERIC_BY_TAB[tab];
 
   return (
@@ -419,7 +570,7 @@ function PreviewCanvas({
           height: h,
         }}
       >
-        {usingTenant ? (() => {
+        {tenantComponent ? (() => {
           const TenantComponent = tenantComponent as FC;
           return <TenantComponent />;
         })() : (

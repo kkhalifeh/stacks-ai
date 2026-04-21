@@ -83,41 +83,87 @@ const themeCssFiles = import.meta.glob<string>('/stacks/*/theme/*.css', { eager:
 const assetUrls = import.meta.glob<string>('/stacks/*/assets/**/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
 
 // ─── TENANT BRAND ──────────────────────────────────────────────
-// Tenant-level brand is loaded from /brand/. It serves as the default
-// theme + logo for any stack that doesn't override them in its stack.json.
+// Tenant-level brand lives at /brand/. Multiple themes coexist under
+// /brand/themes/<id>/. The tenant.json's activeThemeId points at the default.
 
 interface TenantManifest {
   name: string;
   subtitle?: string;
   logo?: string;
-  theme?: string;
+  activeThemeId?: string;
+  theme?: string; // legacy: pre-multi-theme single pointer
+}
+
+interface ThemeMetaRaw {
+  id?: string;
+  name?: string;
+  description?: string;
+  createdAt?: string;
 }
 
 const tenantManifestRaw = import.meta.glob<TenantManifest>('/brand/tenant.json', { eager: true, import: 'default' });
-const tenantThemeCss = import.meta.glob<string>('/brand/*.css', { eager: true, query: '?raw', import: 'default' });
 const tenantAssets = import.meta.glob<string>('/brand/*.{png,jpg,jpeg,svg,webp}', { eager: true, import: 'default' });
+const tenantThemeCssFiles = import.meta.glob<string>('/brand/themes/*/theme.css', { eager: true, query: '?raw', import: 'default' });
+const tenantThemeMetas = import.meta.glob<ThemeMetaRaw>('/brand/themes/*/meta.json', { eager: true, import: 'default' });
+const legacyTenantTheme = import.meta.glob<string>('/brand/theme.css', { eager: true, query: '?raw', import: 'default' });
+
+export interface TenantThemeInfo {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  themeCss: string;
+}
 
 export interface LoadedTenant {
   name: string;
   subtitle?: string;
   logoUrl?: string;
+  activeThemeId?: string;
+  themes: TenantThemeInfo[];
+  /** Effective CSS for the active theme (or legacy theme.css as a fallback). */
   themeCss?: string;
-  themePath?: string; // e.g. "theme.css" — relative to /brand/
-  logoPath?: string;  // e.g. "logo.png"
+}
+
+function themeIdFromPath(p: string): string | undefined {
+  const m = p.match(/^\/brand\/themes\/([^/]+)\//);
+  return m?.[1];
+}
+
+function loadTenantThemes(): TenantThemeInfo[] {
+  const byId = new Map<string, TenantThemeInfo>();
+  for (const [p, css] of Object.entries(tenantThemeCssFiles)) {
+    const id = themeIdFromPath(p);
+    if (!id) continue;
+    byId.set(id, { id, name: id, themeCss: css });
+  }
+  for (const [p, meta] of Object.entries(tenantThemeMetas)) {
+    const id = themeIdFromPath(p);
+    if (!id) continue;
+    const existing = byId.get(id);
+    if (!existing) continue;
+    if (meta.name) existing.name = meta.name;
+    if (meta.description) existing.description = meta.description;
+    if (meta.createdAt) existing.createdAt = meta.createdAt;
+  }
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function loadTenant(): LoadedTenant | undefined {
   const raw = tenantManifestRaw['/brand/tenant.json'];
   if (!raw) return undefined;
-  const themePath = raw.theme ?? 'theme.css';
-  const logoPath = raw.logo;
+  const themes = loadTenantThemes();
+  const active = raw.activeThemeId
+    ? themes.find(t => t.id === raw.activeThemeId)
+    : themes[0];
+  const legacyCss = legacyTenantTheme['/brand/theme.css'];
   return {
     name: raw.name,
     subtitle: raw.subtitle,
-    themePath,
-    logoPath,
-    themeCss: tenantThemeCss[`/brand/${themePath}`],
-    logoUrl: logoPath ? tenantAssets[`/brand/${logoPath}`] : undefined,
+    logoUrl: raw.logo ? tenantAssets[`/brand/${raw.logo}`] : undefined,
+    activeThemeId: active?.id,
+    themes,
+    themeCss: active?.themeCss ?? legacyCss,
   };
 }
 
@@ -282,6 +328,16 @@ export function applyStackTheme(stack: LoadedStack | undefined): void {
     document.head.appendChild(activeThemeEl);
   }
   activeThemeEl.textContent = stack?.themeCss ?? '';
+}
+
+export function applyRawTheme(css: string | undefined): void {
+  if (typeof document === 'undefined') return;
+  if (!activeThemeEl) {
+    activeThemeEl = document.createElement('style');
+    activeThemeEl.setAttribute('data-stack-theme', '');
+    document.head.appendChild(activeThemeEl);
+  }
+  activeThemeEl.textContent = css ?? '';
 }
 
 let activePrintPageSizeEl: HTMLStyleElement | null = null;

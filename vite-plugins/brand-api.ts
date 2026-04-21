@@ -5,8 +5,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 
 const BRAND_DIR = 'brand';
+const THEMES_SUBDIR = 'themes';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const THEME_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 interface BrandApiOptions {
   apiKey?: string;
@@ -37,62 +39,38 @@ export interface ThemeProposal {
 
 const TOOL_SCHEMA = {
   name: 'propose_brand_theme',
-  description:
-    'Propose a complete brand theme based on an uploaded logo and optional brand context. The theme will be used to style A4 documents and 16:9 slide decks for this tenant.',
+  description: 'Propose a complete brand theme based on an uploaded logo and optional brand context.',
   input_schema: {
     type: 'object',
     required: ['description', 'palette', 'typography', 'radii', 'shadows'],
     properties: {
-      description: {
-        type: 'string',
-        description: 'One short paragraph (3-4 sentences) explaining the rationale: what the palette evokes, which colors came from the logo, and how the typography/radii reinforce the brand.',
-      },
+      description: { type: 'string', description: '3-4 sentence rationale.' },
       palette: {
         type: 'object',
         required: ['primary', 'primary_light', 'dark', 'dark_surface', 'light_bg', 'text', 'text_muted', 'border', 'accents'],
         properties: {
-          primary: { type: 'string', description: 'Primary brand color — hex like #1976D2. Should be the most prominent logo color.' },
-          primary_light: { type: 'string', description: 'Lighter tint of primary — hex.' },
-          dark: { type: 'string', description: 'Deep brand neutral for chrome — hex.' },
-          dark_surface: { type: 'string', description: 'Mid-dark surface tone — hex.' },
-          light_bg: { type: 'string', description: 'Page canvas / light background — hex.' },
-          text: { type: 'string', description: 'Primary body text color — hex.' },
-          text_muted: { type: 'string', description: 'Muted text as rgba() string — e.g. rgba(27,35,50,0.65)' },
-          border: { type: 'string', description: 'Subtle border color as rgba() string.' },
-          accents: {
-            type: 'array',
-            description: 'Exactly 4 accent hex colors taken from the logo, ordered warmest→coolest, for multi-color accent stripes and highlights.',
-            minItems: 4,
-            maxItems: 4,
-            items: { type: 'string' },
-          },
+          primary: { type: 'string' }, primary_light: { type: 'string' },
+          dark: { type: 'string' }, dark_surface: { type: 'string' },
+          light_bg: { type: 'string' }, text: { type: 'string' },
+          text_muted: { type: 'string' }, border: { type: 'string' },
+          accents: { type: 'array', minItems: 4, maxItems: 4, items: { type: 'string' } },
         },
       },
       typography: {
         type: 'object',
         required: ['heading_font', 'body_font'],
         properties: {
-          heading_font: { type: 'string', description: 'CSS font-family value for headings. Use: Inter, system-ui, Helvetica, Georgia, "Playfair Display", or "IBM Plex Sans".' },
-          body_font: { type: 'string', description: 'CSS font-family value for body text.' },
-          feature_settings: { type: 'string', description: 'Optional CSS font-feature-settings string.' },
+          heading_font: { type: 'string' }, body_font: { type: 'string' },
+          feature_settings: { type: 'string' },
         },
       },
       radii: {
-        type: 'object',
-        required: ['sm', 'md', 'lg'],
-        properties: {
-          sm: { type: 'number', description: 'Small radius in px (2-8).' },
-          md: { type: 'number', description: 'Medium radius in px (6-14).' },
-          lg: { type: 'number', description: 'Large radius in px (10-20).' },
-        },
+        type: 'object', required: ['sm', 'md', 'lg'],
+        properties: { sm: { type: 'number' }, md: { type: 'number' }, lg: { type: 'number' } },
       },
       shadows: {
-        type: 'object',
-        required: ['resting', 'elevated'],
-        properties: {
-          resting: { type: 'string', description: 'CSS box-shadow value for cards at rest.' },
-          elevated: { type: 'string', description: 'CSS box-shadow value for hovered/elevated surfaces.' },
-        },
+        type: 'object', required: ['resting', 'elevated'],
+        properties: { resting: { type: 'string' }, elevated: { type: 'string' } },
       },
     },
   },
@@ -126,14 +104,23 @@ async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true; } catch { return false; }
 }
 
-function proposalToCss(proposal: ThemeProposal): string {
+function slugify(s: string): string {
+  return s
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64);
+}
+
+function proposalToCss(proposal: ThemeProposal, themeName: string): string {
   const p = proposal.palette;
   const t = proposal.typography;
   const r = proposal.radii;
   const s = proposal.shadows;
   const a = p.accents;
   return `/*
-  Brand theme generated by Brand Studio.
+  ${themeName} — generated by Brand Studio.
   ${proposal.description.replace(/\*\//g, '* /')}
 */
 
@@ -152,7 +139,6 @@ function proposalToCss(proposal: ThemeProposal): string {
   --color-accent-3: ${a[2]};
   --color-accent-4: ${a[3]};
 
-  /* Legacy compatibility: the Kinz tender pages reference these names directly. */
   --color-kinz-red: ${a[0]};
   --color-kinz-orange: ${a[1]};
   --color-kinz-yellow: ${a[2]};
@@ -190,6 +176,37 @@ function mediaTypeForExt(name: string): 'image/png' | 'image/jpeg' | 'image/gif'
   return 'image/png';
 }
 
+interface ThemeMeta {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
+async function readThemesDir(brandDir: string): Promise<ThemeMeta[]> {
+  const dir = path.join(brandDir, THEMES_SUBDIR);
+  if (!(await exists(dir))) return [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const out: ThemeMeta[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const metaPath = path.join(dir, entry.name, 'meta.json');
+    const cssPath = path.join(dir, entry.name, 'theme.css');
+    if (!(await exists(cssPath))) continue;
+    let meta: ThemeMeta;
+    if (await exists(metaPath)) {
+      try { meta = JSON.parse(await fs.readFile(metaPath, 'utf8')); }
+      catch { meta = { id: entry.name, name: entry.name, createdAt: '' }; }
+    } else {
+      meta = { id: entry.name, name: entry.name, createdAt: '' };
+    }
+    meta.id = entry.name;
+    out.push(meta);
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
+
 export function brandApi(opts: BrandApiOptions = {}): Plugin {
   const apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
   const model = opts.model ?? process.env.ANTHROPIC_BRAND_MODEL ?? DEFAULT_MODEL;
@@ -200,10 +217,12 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
       const root = server.config.root;
       const brandDir = path.join(root, BRAND_DIR);
       const manifestPath = path.join(brandDir, 'tenant.json');
-      const themePath = path.join(brandDir, 'theme.css');
+      const themesDir = path.join(brandDir, THEMES_SUBDIR);
 
       const readManifest = async () => {
-        if (!(await exists(manifestPath))) return { name: 'My Brand', logo: 'logo.png', theme: 'theme.css' };
+        if (!(await exists(manifestPath))) {
+          return { name: 'My Brand', logo: 'logo.png' } as Record<string, unknown>;
+        }
         return JSON.parse(await fs.readFile(manifestPath, 'utf8'));
       };
       const writeManifest = async (m: unknown) =>
@@ -218,20 +237,22 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
           const method = req.method ?? 'GET';
           const rest = pathOnly.replace(/^\/__api\/brand\/?/, '').replace(/^\/+/, '');
 
-          // GET /__api/brand — tenant metadata
+          // GET /__api/brand — tenant metadata + themes list
           if (!rest && method === 'GET') {
             await fs.mkdir(brandDir, { recursive: true });
             const manifest = await readManifest();
             const logo = await findLogoFile(brandDir);
+            const themes = await readThemesDir(brandDir);
             return sendJson(res, 200, {
               name: manifest.name ?? 'My Brand',
               subtitle: manifest.subtitle ?? '',
               logo: logo?.name ?? null,
-              hasTheme: await exists(themePath),
+              activeThemeId: manifest.activeThemeId ?? null,
+              themes,
             });
           }
 
-          // PATCH /__api/brand — update tenant metadata (name/subtitle)
+          // PATCH /__api/brand — update tenant name/subtitle
           if (!rest && method === 'PATCH') {
             let body: { name?: string; subtitle?: string };
             try { body = await readJsonBody(req); }
@@ -244,7 +265,7 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             return sendJson(res, 200, { name: manifest.name, subtitle: manifest.subtitle });
           }
 
-          // GET /__api/brand/logo — serve the tenant logo
+          // GET /__api/brand/logo
           if (rest === 'logo' && method === 'GET') {
             const logo = await findLogoFile(brandDir);
             if (!logo) return sendJson(res, 404, { error: 'No logo uploaded' });
@@ -255,10 +276,9 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             return;
           }
 
-          // POST /__api/brand/logo — upload tenant logo
+          // POST /__api/brand/logo
           if (rest === 'logo' && method === 'POST') {
             await fs.mkdir(brandDir, { recursive: true });
-            // Remove any existing logo
             const existing = await findLogoFile(brandDir);
             if (existing) await fs.rm(existing.abs, { force: true });
 
@@ -272,15 +292,13 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             const body = await readBinaryBody(req, MAX_UPLOAD_BYTES);
             const target = path.join(brandDir, `logo${ext}`);
             await fs.writeFile(target, body);
-
             const manifest = await readManifest();
             manifest.logo = `logo${ext}`;
             await writeManifest(manifest);
-
             return sendJson(res, 201, { name: `logo${ext}`, size: body.length });
           }
 
-          // POST /__api/brand/generate — Claude call
+          // POST /__api/brand/generate — Claude call, returns proposal (not saved)
           if (rest === 'generate' && method === 'POST') {
             if (!apiKey) {
               return sendJson(res, 500, {
@@ -304,9 +322,9 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             const userText = [
               `Brand name: ${body.name ?? 'Unnamed'}`,
               body.keywords ? `Keywords / tone: ${body.keywords}` : '',
-              body.feedback ? `User feedback on previous proposal (act on this): ${body.feedback}` : '',
+              body.feedback ? `User feedback (act on this): ${body.feedback}` : '',
               '',
-              'Analyze the uploaded logo. Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 print documents and 16:9 slide decks. Be precise with hex values — do not invent colors that are not in the logo for `primary`/`accents`. For neutrals (text, light_bg, dark, border) choose tones that pair well with the logo, not the logo colors themselves.',
+              'Analyze the uploaded logo. Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 documents and 16:9 slide decks. Precise hex values. Neutrals (text, light_bg, dark, border) should pair well with the logo but need not be logo-derived.',
             ].filter(Boolean).join('\n');
 
             try {
@@ -315,17 +333,14 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
                 max_tokens: 2000,
                 tools: [TOOL_SCHEMA as unknown as Anthropic.Tool],
                 tool_choice: { type: 'tool', name: 'propose_brand_theme' },
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-                      { type: 'text', text: userText },
-                    ],
-                  },
-                ],
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+                    { type: 'text', text: userText },
+                  ],
+                }],
               });
-
               const toolBlock = response.content.find(b => b.type === 'tool_use');
               if (!toolBlock || toolBlock.type !== 'tool_use') {
                 return sendJson(res, 502, { error: 'Claude did not return a structured proposal.' });
@@ -341,23 +356,89 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             }
           }
 
-          // POST /__api/brand/apply — write brand/theme.css
-          if (rest === 'apply' && method === 'POST') {
-            let body: { proposal: ThemeProposal };
+          // GET /__api/brand/themes — list saved themes
+          if (rest === 'themes' && method === 'GET') {
+            await fs.mkdir(brandDir, { recursive: true });
+            const themes = await readThemesDir(brandDir);
+            return sendJson(res, 200, { themes });
+          }
+
+          // POST /__api/brand/themes — save a new theme from a proposal
+          if (rest === 'themes' && method === 'POST') {
+            let body: { name: string; proposal: ThemeProposal; setDefault?: boolean };
             try { body = await readJsonBody(req); }
             catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+
+            if (!body.name || body.name.trim().length === 0) {
+              return sendJson(res, 400, { error: 'name is required' });
+            }
             if (!body.proposal || !body.proposal.palette) {
               return sendJson(res, 400, { error: 'proposal is required' });
             }
 
-            await fs.mkdir(brandDir, { recursive: true });
-            await fs.writeFile(themePath, proposalToCss(body.proposal), 'utf8');
+            let id = slugify(body.name);
+            if (!THEME_ID_RE.test(id)) return sendJson(res, 400, { error: 'Invalid theme name (cannot produce a slug).' });
 
-            const manifest = await readManifest();
-            manifest.theme = 'theme.css';
-            await writeManifest(manifest);
+            const baseId = id;
+            let suffix = 2;
+            while (await exists(path.join(themesDir, id))) {
+              id = `${baseId}-${suffix++}`;
+            }
 
-            return sendJson(res, 200, { applied: true });
+            const themeDir = path.join(themesDir, id);
+            await fs.mkdir(themeDir, { recursive: true });
+            await fs.writeFile(
+              path.join(themeDir, 'theme.css'),
+              proposalToCss(body.proposal, body.name.trim()),
+              'utf8',
+            );
+            const meta: ThemeMeta = {
+              id,
+              name: body.name.trim(),
+              description: body.proposal.description,
+              createdAt: new Date().toISOString(),
+            };
+            await fs.writeFile(
+              path.join(themeDir, 'meta.json'),
+              JSON.stringify(meta, null, 2) + '\n',
+              'utf8',
+            );
+
+            if (body.setDefault) {
+              const manifest = await readManifest();
+              manifest.activeThemeId = id;
+              await writeManifest(manifest);
+            }
+
+            return sendJson(res, 201, { id, name: meta.name });
+          }
+
+          // Per-theme routes: /__api/brand/themes/:id[/default]
+          const themeRoute = rest.match(/^themes\/([^/]+)(?:\/(default))?$/);
+          if (themeRoute) {
+            const id = decodeURIComponent(themeRoute[1]);
+            const sub = themeRoute[2];
+            if (!THEME_ID_RE.test(id)) return sendJson(res, 400, { error: 'Invalid theme id' });
+            const themeDir = path.join(themesDir, id);
+            if (!(await exists(themeDir))) return sendJson(res, 404, { error: 'Theme not found' });
+
+            // POST /themes/:id/default — set as active
+            if (sub === 'default' && method === 'POST') {
+              const manifest = await readManifest();
+              manifest.activeThemeId = id;
+              await writeManifest(manifest);
+              return sendJson(res, 200, { activeThemeId: id });
+            }
+
+            // DELETE /themes/:id
+            if (!sub && method === 'DELETE') {
+              const manifest = await readManifest();
+              if (manifest.activeThemeId === id) {
+                return sendJson(res, 409, { error: 'Cannot delete the active theme. Set a different theme as default first.' });
+              }
+              await fs.rm(themeDir, { recursive: true, force: true });
+              return sendJson(res, 200, { deleted: id });
+            }
           }
 
           return next();

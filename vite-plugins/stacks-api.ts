@@ -8,6 +8,7 @@ interface CreateStackBody {
   id: string;
   name: string;
   template: 'a4' | 'slide-16x9';
+  themeId?: string;
 }
 
 interface UpdateStackBody {
@@ -185,6 +186,25 @@ export function stacksApi(): Plugin {
                       path.join(targetAssetsDir, entry.name),
                     );
                   }
+                }
+              }
+            }
+
+            // If a specific tenant theme was requested, snapshot it into the stack so the stack
+            // keeps that theme regardless of future tenant changes.
+            if (body.themeId) {
+              const themeSrc = path.join(root, TENANT_BRAND_DIR, 'themes', body.themeId, 'theme.css');
+              if (await exists(themeSrc)) {
+                const targetThemeDir = path.join(targetDir, 'theme');
+                await fs.mkdir(targetThemeDir, { recursive: true });
+                await fs.copyFile(themeSrc, path.join(targetThemeDir, 'theme.css'));
+
+                // Update stack.json so the loader picks it up
+                const manifestPath = path.join(targetDir, 'stack.json');
+                if (await exists(manifestPath)) {
+                  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+                  manifest.theme = 'theme/theme.css';
+                  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
                 }
               }
             }

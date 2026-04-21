@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Monitor, X } from 'lucide-react';
 import { createStack, slugify } from '../api';
+import { tenant } from '../stacks';
 
 interface NewStackModalProps {
   existingIds: string[];
@@ -13,9 +14,12 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
   const [id, setId] = useState('');
   const [idTouched, setIdTouched] = useState(false);
   const [format, setFormat] = useState<'a4' | 'slide-16x9'>('a4');
+  // '' means "inherit tenant default"; otherwise a saved theme id
+  const [themeId, setThemeId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const availableThemes = tenant?.themes ?? [];
 
   useEffect(() => {
     nameInputRef.current?.focus();
@@ -42,7 +46,12 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
     setSubmitting(true);
     setError(null);
     try {
-      await createStack({ id, name: name.trim(), template: format });
+      await createStack({
+        id,
+        name: name.trim(),
+        template: format,
+        themeId: themeId || undefined,
+      });
       onCreated(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create stack');
@@ -189,6 +198,42 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
             </button>
           </div>
         </div>
+
+        {availableThemes.length > 0 && (
+          <div className="mb-6">
+            <span
+              className="block text-[11px] font-medium mb-2"
+              style={{ color: 'var(--lx-text-muted)' }}
+            >
+              Theme
+            </span>
+            <select
+              value={themeId}
+              onChange={e => setThemeId(e.target.value)}
+              className="lx-focus w-full text-[13px] px-3 py-2 transition-colors"
+              style={{
+                background: 'var(--lx-surface)',
+                border: '1px solid var(--lx-border)',
+                borderRadius: 'var(--lx-radius-md)',
+                color: 'var(--lx-text)',
+                outline: 'none',
+              }}
+            >
+              <option value="">Inherit tenant default (live)</option>
+              {availableThemes.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.id === tenant?.activeThemeId ? ' — default' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px]" style={{ color: 'var(--lx-text-subtle)' }}>
+              {themeId
+                ? 'A snapshot of this theme is copied into the stack. Future changes to the tenant theme will not affect it.'
+                : 'The stack inherits whichever theme is the tenant default, now and in the future.'}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div

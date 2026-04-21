@@ -20,11 +20,19 @@ export interface ThemeProposal {
   shadows: { resting: string; elevated: string };
 }
 
+export interface ThemeMeta {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+}
+
 export interface TenantBrand {
   name: string;
   subtitle: string;
   logo: string | null;
-  hasTheme: boolean;
+  activeThemeId: string | null;
+  themes: ThemeMeta[];
 }
 
 async function handle<T>(res: Response): Promise<T> {
@@ -71,12 +79,28 @@ export async function generateTenantTheme(input: {
   return handle(res);
 }
 
-export async function applyTenantTheme(proposal: ThemeProposal): Promise<{ applied: true }> {
-  const res = await fetch('/__api/brand/apply', {
+export async function saveTheme(input: {
+  name: string;
+  proposal: ThemeProposal;
+  setDefault?: boolean;
+}): Promise<{ id: string; name: string }> {
+  const res = await fetch('/__api/brand/themes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proposal }),
+    body: JSON.stringify(input),
   });
+  return handle(res);
+}
+
+export async function setDefaultTheme(id: string): Promise<{ activeThemeId: string }> {
+  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}/default`, {
+    method: 'POST',
+  });
+  return handle(res);
+}
+
+export async function deleteTheme(id: string): Promise<{ deleted: string }> {
+  const res = await fetch(`/__api/brand/themes/${encodeURIComponent(id)}`, { method: 'DELETE' });
   return handle(res);
 }
 
@@ -114,4 +138,10 @@ export function proposalToCssVars(p: ThemeProposal): string {
     --shadow-resting: ${p.shadows.resting};
     --shadow-elevated: ${p.shadows.elevated};
   `.trim();
+}
+
+/** Extract the :root CSS variables from a theme file (string) so we can scope them for preview. */
+export function extractRootVars(css: string): string {
+  const match = css.match(/:root\s*\{([\s\S]*?)\}/);
+  return match ? match[1].trim() : '';
 }
