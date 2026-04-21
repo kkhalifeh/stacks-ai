@@ -40,15 +40,20 @@ export function TitleSlide() {
   return (
     <div
       ref={ref}
-      className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden"
+      className="flex flex-col relative overflow-hidden"
       style={{
+        width: 1280,
+        height: 720,
         fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
         background: coverBg,
       }}
     >
       <AccentStripe variant={accentStripe} height={8} />
 
-      <div className="relative flex flex-col px-24 pt-16 pb-12 z-10" style={{ flex: '1 1 auto' }}>
+      <div
+        className="relative flex flex-col px-24 pt-16 pb-12 z-10"
+        style={{ flex: '1 1 0%', minHeight: 0, height: '100%' }}
+      >
         <img src={logo} alt="" className="h-12 w-auto object-contain self-start mb-16" />
 
         <p

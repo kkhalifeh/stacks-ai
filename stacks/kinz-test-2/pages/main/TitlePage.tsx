@@ -41,19 +41,12 @@ export function TitlePage() {
   return (
     <div
       ref={ref}
-      className="flex flex-col"
-      style={{
-        width: 794,
-        height: 1123,
-        fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
-      }}
+      className="w-[794px] h-[1123px] flex flex-col"
+      style={{ fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)' }}
     >
       <AccentStripe variant={accentStripe} height={8} />
 
-      <div
-        className="flex flex-col p-12 relative"
-        style={{ flex: '1 1 0%', minHeight: 0, height: '100%', background: coverBg }}
-      >
+      <div className="flex flex-col p-12 relative" style={{ flex: '1 1 auto', background: coverBg }}>
         <img src={logo} alt="" className="h-14 w-auto object-contain self-start mb-16" />
 
         <p
