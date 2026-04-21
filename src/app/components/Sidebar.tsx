@@ -51,22 +51,50 @@ function NavButton({ id, label, maxPages, pageCount, active, onClick, onRename }
     <div className="group relative">
       <button
         onClick={onClick}
-        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
-          active ? 'text-white font-semibold' : 'text-white/60 hover:bg-white/5 hover:text-white'
-        }`}
-        style={active ? { background: 'var(--color-primary)' } : undefined}
+        className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-[8px] transition-colors"
+        style={
+          active
+            ? { background: 'var(--lx-accent-soft)', color: 'var(--lx-text)' }
+            : { color: 'var(--lx-text-muted)' }
+        }
+        onMouseEnter={e => {
+          if (!active) {
+            e.currentTarget.style.background = 'var(--lx-surface-hover)';
+            e.currentTarget.style.color = 'var(--lx-text)';
+          }
+        }}
+        onMouseLeave={e => {
+          if (!active) {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--lx-text-muted)';
+          }
+        }}
       >
-        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-[11px] text-left flex-1 leading-tight">{label}</span>
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />
+        <span
+          className="text-[12px] text-left flex-1 leading-tight tracking-tight"
+          style={{ fontWeight: active ? 500 : 400 }}
+        >
+          {label}
+        </span>
         {(maxPages ?? pageCount) > 0 && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/40 flex-shrink-0">
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0 font-medium"
+            style={{
+              background: active ? 'rgba(255,255,255,0.08)' : 'var(--lx-surface-hover)',
+              color: 'var(--lx-text-subtle)',
+            }}
+          >
             {pageCount}{maxPages ? `/${maxPages}` : ''}p
           </span>
         )}
       </button>
       <button
         onClick={e => { e.stopPropagation(); onRename(); }}
-        className="absolute top-1/2 -translate-y-1/2 right-8 p-1 rounded text-white/40 hover:text-white opacity-0 group-hover:opacity-100"
+        className="absolute top-1/2 -translate-y-1/2 right-8 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ color: 'var(--lx-text-subtle)' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
         title="Rename document"
       >
         <Pencil className="w-3 h-3" />
@@ -89,7 +117,7 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
   const [expanded, setExpanded] = useState(hasActive || defaultOpen);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const color = binder.color ?? 'var(--color-primary)';
+  const color = binder.color ?? 'var(--lx-accent)';
   const totalPages = binder.documents.reduce((sum, d) => sum + d.pages.length, 0);
 
   async function handleRenameBinder(e: React.MouseEvent) {
@@ -116,34 +144,53 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
   }
 
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       <div className="group relative">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-[8px] transition-colors"
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-surface-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
-          <div className="w-1 h-8 rounded-full flex-shrink-0" style={{ background: color }} />
-          <div className="flex-1 text-left">
+          <div className="w-[3px] h-7 rounded-full flex-shrink-0" style={{ background: color }} />
+          <div className="flex-1 text-left min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white">{binder.label}</span>
+              <span
+                className="text-[12px] font-semibold tracking-tight truncate"
+                style={{ color: 'var(--lx-text)' }}
+              >
+                {binder.label}
+              </span>
               {binder.passwordProtected ? (
-                <Lock className="w-3 h-3 text-white/30" />
+                <Lock className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--lx-text-faint)' }} />
               ) : (
-                <Unlock className="w-3 h-3 text-white/20" />
+                <Unlock className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--lx-text-faint)' }} />
               )}
             </div>
-            {binder.subtitle && <p className="text-[9px] text-white/35 leading-tight">{binder.subtitle}</p>}
+            {binder.subtitle && (
+              <p
+                className="text-[10px] leading-tight mt-0.5 truncate"
+                style={{ color: 'var(--lx-text-subtle)' }}
+              >
+                {binder.subtitle}
+              </p>
+            )}
           </div>
-          <span className="text-[9px] text-white/25 mr-1">{totalPages}pg</span>
+          <span className="text-[9px] mr-1 font-medium" style={{ color: 'var(--lx-text-faint)' }}>
+            {totalPages}pg
+          </span>
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
+            <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--lx-text-subtle)' }} />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+            <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--lx-text-subtle)' }} />
           )}
         </button>
         <button
           onClick={handleRenameBinder}
-          className="absolute top-1/2 -translate-y-1/2 right-7 p-1 rounded text-white/40 hover:text-white opacity-0 group-hover:opacity-100"
+          className="absolute top-1/2 -translate-y-1/2 right-7 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ color: 'var(--lx-text-subtle)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
           title="Rename binder"
         >
           <Pencil className="w-3 h-3" />
@@ -151,7 +198,7 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
       </div>
 
       {expanded && (
-        <div className="ml-3 pl-2 border-l border-white/8">
+        <div className="ml-3 pl-2" style={{ borderLeft: '1px solid var(--lx-divider)' }}>
           <div className="space-y-0.5 py-1">
             {binder.documents.map(doc => (
               <NavButton
@@ -169,32 +216,58 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
 
           {binder.attachments && binder.attachments.length > 0 && (
             <div className="px-1 py-1.5">
-              <p className="text-[9px] text-white/30 uppercase tracking-wider font-semibold px-2 mb-1">
+              <p
+                className="text-[9px] uppercase tracking-[0.08em] font-semibold px-2 mb-1"
+                style={{ color: 'var(--lx-text-faint)' }}
+              >
                 Attached Statements
               </p>
               <div className="space-y-0.5">
-                {binder.attachments.map(att => (
-                  <button
-                    key={att.url}
-                    onClick={() => onPdfPreview(activePdf === att.url ? null : att.url)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                      activePdf === att.url
-                        ? 'text-white font-semibold'
-                        : 'text-white/60 hover:bg-white/5 hover:text-white'
-                    }`}
-                    style={activePdf === att.url ? { background: color } : undefined}
-                  >
-                    <Paperclip className="w-3 h-3 flex-shrink-0" />
-                    <span className="text-[11px] text-left flex-1 leading-tight">{att.label}</span>
-                  </button>
-                ))}
+                {binder.attachments.map(att => {
+                  const isActive = activePdf === att.url;
+                  return (
+                    <button
+                      key={att.url}
+                      onClick={() => onPdfPreview(isActive ? null : att.url)}
+                      className="w-full flex items-center gap-2 px-3 py-[7px] rounded-[8px] transition-colors"
+                      style={
+                        isActive
+                          ? { background: 'var(--lx-accent-soft)', color: 'var(--lx-text)' }
+                          : { color: 'var(--lx-text-muted)' }
+                      }
+                      onMouseEnter={e => {
+                        if (!isActive) {
+                          e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                          e.currentTarget.style.color = 'var(--lx-text)';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!isActive) {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = 'var(--lx-text-muted)';
+                        }
+                      }}
+                    >
+                      <Paperclip className="w-3 h-3 flex-shrink-0" />
+                      <span
+                        className="text-[12px] text-left flex-1 leading-tight tracking-tight"
+                        style={{ fontWeight: isActive ? 500 : 400 }}
+                      >
+                        {att.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
           {binder.passwordProtected && (
             <div className="px-2 py-2">
-              <label className="text-[9px] text-white/30 uppercase tracking-wider font-semibold">
+              <label
+                className="text-[9px] uppercase tracking-[0.08em] font-semibold"
+                style={{ color: 'var(--lx-text-faint)' }}
+              >
                 PDF Password (optional)
               </label>
               <div className="flex gap-1 mt-1">
@@ -203,11 +276,25 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Set after export"
-                  className="flex-1 text-[10px] px-2 py-1.5 rounded bg-white/5 border border-white/10 text-white/70 placeholder:text-white/20 focus:outline-none focus:border-white/30"
+                  className="lx-focus flex-1 text-[11px] px-2 py-1.5"
+                  style={{
+                    background: 'var(--lx-surface)',
+                    border: '1px solid var(--lx-border)',
+                    borderRadius: 'var(--lx-radius-sm)',
+                    color: 'var(--lx-text)',
+                    outline: 'none',
+                  }}
                 />
                 <button
                   onClick={() => setShowPassword(!showPassword)}
-                  className="text-[9px] px-1.5 py-1 rounded bg-white/5 text-white/40 hover:text-white/60"
+                  className="text-[10px] px-2 py-1 rounded transition-colors font-medium"
+                  style={{
+                    background: 'var(--lx-surface)',
+                    color: 'var(--lx-text-subtle)',
+                    border: '1px solid var(--lx-border)',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -218,10 +305,24 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
           <div className="px-2 py-1.5">
             <button
               onClick={() => onExport(binder.id)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-semibold text-white/80 hover:text-white border border-white/10 hover:border-white/20 transition-colors"
-              style={{ background: `color-mix(in srgb, ${color} 15%, transparent)` }}
+              className="lx-focus w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-[11px] font-medium transition-colors"
+              style={{
+                background: 'var(--lx-surface)',
+                border: '1px solid var(--lx-border)',
+                color: 'var(--lx-text-muted)',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                e.currentTarget.style.borderColor = 'var(--lx-border-strong)';
+                e.currentTarget.style.color = 'var(--lx-text)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--lx-surface)';
+                e.currentTarget.style.borderColor = 'var(--lx-border)';
+                e.currentTarget.style.color = 'var(--lx-text-muted)';
+              }}
             >
-              <Download className="w-3 h-3" />
+              <Download className="w-3 h-3" strokeWidth={2} />
               Export {binder.label}
             </button>
           </div>
@@ -234,21 +335,40 @@ function BinderSection({ binder, stackId, activeDocumentId, onDocumentChange, on
 export function Sidebar({ stack, activeDocumentId, onDocumentChange, onExport, activePdf, onPdfPreview, onBack }: SidebarProps) {
   return (
     <aside
-      className="fixed left-0 top-0 h-screen w-72 text-white p-5 overflow-y-auto flex flex-col print:hidden"
-      style={{ background: 'var(--color-dark)' }}
+      className="lx-scroll fixed left-0 top-0 h-screen w-72 px-4 py-5 overflow-y-auto flex flex-col print:hidden"
+      style={{
+        background: 'var(--lx-surface)',
+        borderRight: '1px solid var(--lx-border)',
+        color: 'var(--lx-text)',
+      }}
     >
       <button
         onClick={onBack}
-        className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/40 hover:text-white mb-3 -ml-1"
+        className="lx-focus flex items-center gap-1 text-[11px] mb-4 -ml-1 px-1.5 py-1 rounded transition-colors w-fit"
+        style={{ color: 'var(--lx-text-subtle)' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
       >
-        <ChevronLeft className="w-3 h-3" />
+        <ChevronLeft className="w-3.5 h-3.5" strokeWidth={2} />
         All stacks
       </button>
-      <div className="mb-4 flex items-center gap-3">
-        {stack.logoUrl && <img src={stack.logoUrl} alt={stack.name} className="w-9 h-9" />}
-        <div>
-          <h1 className="text-sm font-semibold leading-tight">{stack.name}</h1>
-          {stack.subtitle && <p className="text-[10px] text-white/40">{stack.subtitle}</p>}
+      <div className="mb-5 flex items-center gap-3 px-1">
+        {stack.logoUrl && <img src={stack.logoUrl} alt={stack.name} className="w-9 h-9 rounded" />}
+        <div className="min-w-0">
+          <h1
+            className="text-[13px] font-semibold leading-tight truncate tracking-tight"
+            style={{ color: 'var(--lx-text)' }}
+          >
+            {stack.name}
+          </h1>
+          {stack.subtitle && (
+            <p
+              className="text-[11px] leading-tight mt-0.5 truncate"
+              style={{ color: 'var(--lx-text-subtle)' }}
+            >
+              {stack.subtitle}
+            </p>
+          )}
         </div>
       </div>
 
@@ -258,19 +378,34 @@ export function Sidebar({ stack, activeDocumentId, onDocumentChange, onExport, a
             alert(err instanceof Error ? err.message : 'Failed to open terminal');
           }
         }}
-        className="mb-4 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold text-white/85 hover:text-white border border-white/10 hover:border-white/25 bg-white/[0.03] hover:bg-white/[0.08] transition-colors"
+        className="lx-focus mb-4 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] text-[12px] font-medium transition-colors"
+        style={{
+          background: 'var(--lx-surface-2)',
+          border: '1px solid var(--lx-border)',
+          color: 'var(--lx-text-muted)',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'var(--lx-surface-hover)';
+          e.currentTarget.style.borderColor = 'var(--lx-border-strong)';
+          e.currentTarget.style.color = 'var(--lx-text)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'var(--lx-surface-2)';
+          e.currentTarget.style.borderColor = 'var(--lx-border)';
+          e.currentTarget.style.color = 'var(--lx-text-muted)';
+        }}
       >
-        <TerminalIcon className="w-3.5 h-3.5" />
+        <TerminalIcon className="w-3.5 h-3.5" strokeWidth={1.75} />
         Open Claude in Terminal
       </button>
 
-      <div className="h-px mb-3" style={{ background: 'rgba(255,255,255,0.08)' }} />
+      <div className="h-px mb-3" style={{ background: 'var(--lx-divider)' }} />
 
       <KbPanel stackId={stack.id} />
 
-      <div className="h-px mb-3" style={{ background: 'rgba(255,255,255,0.08)' }} />
+      <div className="h-px mb-3" style={{ background: 'var(--lx-divider)' }} />
 
-      <nav className="flex-1 space-y-1">
+      <nav className="flex-1 space-y-0.5">
         {stack.binders.map(binder => (
           <BinderSection
             key={binder.id}

@@ -26,41 +26,67 @@ export function Landing({ onOpen }: LandingProps) {
   }
 
   return (
-    <div className="min-h-screen text-white" style={{ background: 'var(--launcher-bg, #0E1420)' }}>
+    <div
+      className="min-h-screen"
+      style={{ background: 'var(--lx-bg)', color: 'var(--lx-text)' }}
+    >
       <style>{scopedThemes}</style>
 
-      <header className="px-10 pt-10 pb-6">
-        <div className="flex items-center justify-between">
+      <header className="max-w-[1280px] mx-auto px-10 pt-14 pb-10">
+        <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-bold">Document Builder</h1>
-            <p className="text-sm text-white/50 mt-1">
+            <h1
+              className="text-[22px] font-semibold tracking-tight"
+              style={{ color: 'var(--lx-text)' }}
+            >
+              Document Builder
+            </h1>
+            <p
+              className="text-[13px] mt-1"
+              style={{ color: 'var(--lx-text-muted)' }}
+            >
               {stacks.length} stack{stacks.length === 1 ? '' : 's'}
             </p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+            className="lx-focus flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[10px] transition-colors"
+            style={{
+              background: 'var(--lx-accent)',
+              color: 'white',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-accent-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--lx-accent)')}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" strokeWidth={2.25} />
             New stack
           </button>
         </div>
       </header>
 
-      <main className="px-10 pb-16">
+      <main className="max-w-[1280px] mx-auto px-10 pb-20">
         {stacks.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/15 p-12 text-center">
-            <p className="text-sm text-white/60">No stacks yet.</p>
+          <div
+            className="rounded-[14px] p-14 text-center"
+            style={{
+              border: '1px dashed var(--lx-border-strong)',
+              background: 'var(--lx-surface)',
+            }}
+          >
+            <p className="text-[13px]" style={{ color: 'var(--lx-text-muted)' }}>
+              No stacks yet.
+            </p>
             <button
               onClick={() => setShowModal(true)}
-              className="mt-4 inline-flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
+              className="lx-focus mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[10px]"
+              style={{ background: 'var(--lx-accent)', color: 'white' }}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" strokeWidth={2.25} />
               Create your first stack
             </button>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-5">
+          <div className="flex flex-wrap gap-6">
             {stacks.map(stack => (
               <StackCard
                 key={stack.id}
@@ -71,11 +97,27 @@ export function Landing({ onOpen }: LandingProps) {
             ))}
             <button
               onClick={() => setShowModal(true)}
-              className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-white/10 hover:border-white/30 text-white/40 hover:text-white/80 transition-colors"
-              style={{ width: 282, minHeight: 280 }}
+              className="lx-focus group flex flex-col items-center justify-center rounded-[14px] transition-all"
+              style={{
+                width: 282,
+                minHeight: 280,
+                background: 'transparent',
+                border: '1px dashed var(--lx-border-strong)',
+                color: 'var(--lx-text-subtle)',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--lx-surface)';
+                e.currentTarget.style.borderColor = 'var(--lx-accent)';
+                e.currentTarget.style.color = 'var(--lx-text)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'var(--lx-border-strong)';
+                e.currentTarget.style.color = 'var(--lx-text-subtle)';
+              }}
             >
-              <Plus className="w-6 h-6 mb-1.5" />
-              <span className="text-xs font-semibold">New stack</span>
+              <Plus className="w-5 h-5 mb-2" strokeWidth={1.75} />
+              <span className="text-[12px] font-medium tracking-tight">New stack</span>
             </button>
           </div>
         )}

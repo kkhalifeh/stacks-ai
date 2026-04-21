@@ -27,6 +27,7 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,14 +72,29 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
 
   return (
     <div
-      className="group relative flex flex-col rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/20 transition-colors overflow-hidden"
-      style={{ width: THUMB_WIDTH + 2, opacity: busy ? 0.5 : 1 }}
+      className="group relative flex flex-col overflow-hidden transition-all duration-200"
+      style={{
+        width: THUMB_WIDTH,
+        opacity: busy ? 0.5 : 1,
+        background: 'var(--lx-surface)',
+        border: `1px solid ${hovered ? 'var(--lx-border-strong)' : 'var(--lx-border)'}`,
+        borderRadius: 'var(--lx-radius-lg)',
+        boxShadow: hovered ? 'var(--lx-shadow-elevated)' : 'var(--lx-shadow-resting)',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <button
         onClick={() => onOpen(stack.id)}
         disabled={busy}
         className={`relative overflow-hidden theme-${stack.id} text-left`}
-        style={{ width: THUMB_WIDTH, height: thumbHeight, background: 'white' }}
+        style={{
+          width: THUMB_WIDTH,
+          height: thumbHeight,
+          background: 'white',
+          borderBottom: '1px solid var(--lx-border)',
+        }}
       >
         {firstPage ? (
           <div
@@ -96,7 +112,10 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
             })()}
           </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+          <div
+            className="w-full h-full flex items-center justify-center text-xs"
+            style={{ color: 'var(--lx-text-subtle)', background: 'var(--lx-surface-2)' }}
+          >
             No pages yet
           </div>
         )}
@@ -105,42 +124,85 @@ export function StackCard({ stack, onOpen, onMutated }: StackCardProps) {
       <button
         onClick={() => onOpen(stack.id)}
         disabled={busy}
-        className="text-left p-3 flex flex-col gap-1"
+        className="text-left px-4 py-3.5 flex flex-col gap-1"
       >
         <div className="flex items-center gap-2">
-          <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-white/10 text-white/60">
+          <span
+            className="text-[9px] uppercase tracking-[0.08em] font-semibold px-1.5 py-0.5 rounded"
+            style={{
+              background: 'var(--lx-surface-hover)',
+              color: 'var(--lx-text-muted)',
+            }}
+          >
             {stack.format === 'slide-16x9' ? '16:9' : 'A4'}
           </span>
-          <span className="text-xs font-semibold text-white truncate flex-1">{stack.name}</span>
+          <span
+            className="text-[13px] font-medium truncate flex-1 tracking-tight"
+            style={{ color: 'var(--lx-text)' }}
+          >
+            {stack.name}
+          </span>
         </div>
         {stack.subtitle && (
-          <p className="text-[10px] text-white/40 truncate">{stack.subtitle}</p>
+          <p className="text-[11px] truncate" style={{ color: 'var(--lx-text-subtle)' }}>
+            {stack.subtitle}
+          </p>
         )}
-        <p className="text-[10px] text-white/30">
-          {totalDocuments} document{totalDocuments === 1 ? '' : 's'} · {totalPages} {unitLabel}{totalPages === 1 ? '' : 's'}
+        <p className="text-[11px]" style={{ color: 'var(--lx-text-faint)' }}>
+          {totalDocuments} document{totalDocuments === 1 ? '' : 's'} &middot; {totalPages} {unitLabel}{totalPages === 1 ? '' : 's'}
         </p>
       </button>
 
-      <div className="absolute top-2 right-2" ref={menuRef}>
+      <div className="absolute top-2.5 right-2.5" ref={menuRef}>
         <button
           onClick={() => setMenuOpen(!menuOpen)}
           disabled={busy}
-          className="p-1 rounded-md bg-black/50 backdrop-blur-sm text-white/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          className="lx-focus p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            background: 'rgba(10, 10, 11, 0.78)',
+            backdropFilter: 'blur(6px)',
+            color: 'var(--lx-text-muted)',
+            border: '1px solid var(--lx-border)',
+          }}
           title="More"
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 mt-1 w-32 rounded-lg border border-white/10 bg-[#1B2332] shadow-xl py-1 text-xs z-10">
+          <div
+            className="absolute right-0 mt-1.5 w-36 py-1 text-[12px] z-10"
+            style={{
+              background: 'var(--lx-surface-2)',
+              border: '1px solid var(--lx-border-strong)',
+              borderRadius: 'var(--lx-radius-md)',
+              boxShadow: 'var(--lx-shadow-elevated)',
+            }}
+          >
             <button
               onClick={handleRename}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/5"
+              className="w-full flex items-center gap-2 px-3 py-1.5 transition-colors"
+              style={{ color: 'var(--lx-text-muted)' }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                e.currentTarget.style.color = 'var(--lx-text)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--lx-text-muted)';
+              }}
             >
               <Pencil className="w-3 h-3" /> Rename
             </button>
             <button
               onClick={handleDelete}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-red-300/80 hover:text-red-300 hover:bg-red-500/10"
+              className="w-full flex items-center gap-2 px-3 py-1.5 transition-colors"
+              style={{ color: 'var(--lx-danger)' }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--lx-danger-soft)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+              }}
             >
               <Trash2 className="w-3 h-3" /> Delete
             </button>

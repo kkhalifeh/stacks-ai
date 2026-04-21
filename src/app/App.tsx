@@ -102,9 +102,18 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
 
   if (!activeStack) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-sm text-gray-500 gap-3">
-        <p>Stack <code>{stackId}</code> not found.</p>
-        <button onClick={onBack} className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white">
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-4"
+        style={{ background: 'var(--lx-bg)', color: 'var(--lx-text-muted)' }}
+      >
+        <p className="text-[13px]">
+          Stack <code style={{ color: 'var(--lx-text)' }}>{stackId}</code> not found.
+        </p>
+        <button
+          onClick={onBack}
+          className="text-[12px] px-3.5 py-2 rounded-[10px] font-medium"
+          style={{ background: 'var(--lx-accent)', color: 'white' }}
+        >
           Back to stacks
         </button>
       </div>
@@ -117,7 +126,7 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
   const isInfoBinder = located?.binder.attachments && located.binder.attachments.length > 0;
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--color-light-bg)' }}>
+    <div className="flex min-h-screen" style={{ background: 'var(--lx-bg)' }}>
       <Sidebar
         stack={activeStack}
         activeDocumentId={activeDocumentId}
@@ -129,8 +138,8 @@ function StackViewer({ stackId, onBack }: StackViewerProps) {
       />
 
       <main
-        className="flex-1 ml-72 p-8 overflow-y-auto print:hidden"
-        style={{ background: 'var(--color-dark-surface)' }}
+        className="lx-scroll flex-1 ml-72 p-8 overflow-y-auto print:hidden"
+        style={{ background: 'var(--lx-bg)' }}
       >
         {activePdf ? (
           <div className="flex flex-col items-center py-4 h-full">

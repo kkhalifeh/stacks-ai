@@ -25,6 +25,14 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
     if (!idTouched) setId(slugify(name));
   }, [name, idTouched]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const idConflict = existingIds.includes(id);
   const canSubmit = name.trim().length > 0 && id.length > 0 && !idConflict && !submitting;
 
@@ -42,27 +50,57 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
     }
   }
 
+  const formatOptionStyle = (active: boolean) =>
+    ({
+      background: active ? 'var(--lx-accent-soft)' : 'var(--lx-surface)',
+      border: `1px solid ${active ? 'var(--lx-accent)' : 'var(--lx-border)'}`,
+      color: active ? 'var(--lx-text)' : 'var(--lx-text-muted)',
+    } as React.CSSProperties);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      style={{
+        background: 'rgba(6, 6, 8, 0.72)',
+        backdropFilter: 'blur(8px)',
+      }}
       onClick={onClose}
     >
       <form
         onClick={e => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-xl border border-white/10 p-6"
-        style={{ background: '#1B2332' }}
+        className="w-full max-w-md p-7"
+        style={{
+          background: 'var(--lx-surface-2)',
+          border: '1px solid var(--lx-border-strong)',
+          borderRadius: 'var(--lx-radius-lg)',
+          boxShadow: 'var(--lx-shadow-elevated)',
+        }}
       >
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-white">New stack</h2>
-          <button type="button" onClick={onClose} className="text-white/40 hover:text-white">
+        <div className="flex items-center justify-between mb-6">
+          <h2
+            className="text-[15px] font-semibold tracking-tight"
+            style={{ color: 'var(--lx-text)' }}
+          >
+            New stack
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="lx-focus p-1 rounded transition-colors"
+            style={{ color: 'var(--lx-text-subtle)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <label className="block mb-4">
-          <span className="block text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">
+        <label className="block mb-5">
+          <span
+            className="block text-[11px] font-medium mb-1.5"
+            style={{ color: 'var(--lx-text-muted)' }}
+          >
             Name
           </span>
           <input
@@ -70,23 +108,41 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="MODEE AI-GIS Tender"
-            className="w-full text-sm px-3 py-2 rounded bg-white/5 border border-white/10 text-white placeholder:text-white/25 focus:outline-none focus:border-white/40"
+            className="lx-focus w-full text-[13px] px-3 py-2 transition-colors"
+            style={{
+              background: 'var(--lx-surface)',
+              border: '1px solid var(--lx-border)',
+              borderRadius: 'var(--lx-radius-md)',
+              color: 'var(--lx-text)',
+              outline: 'none',
+            }}
           />
         </label>
 
-        <label className="block mb-4">
-          <span className="block text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">
+        <label className="block mb-5">
+          <span
+            className="block text-[11px] font-medium mb-1.5"
+            style={{ color: 'var(--lx-text-muted)' }}
+          >
             Folder ID
           </span>
           <input
             value={id}
             onChange={e => { setId(slugify(e.target.value)); setIdTouched(true); }}
             placeholder="modee-ai-gis-tender"
-            className={`w-full text-sm px-3 py-2 rounded bg-white/5 border text-white placeholder:text-white/25 focus:outline-none ${
-              idConflict ? 'border-red-500/60' : 'border-white/10 focus:border-white/40'
-            }`}
+            className="lx-focus w-full text-[13px] px-3 py-2 font-mono transition-colors"
+            style={{
+              background: 'var(--lx-surface)',
+              border: `1px solid ${idConflict ? 'var(--lx-danger)' : 'var(--lx-border)'}`,
+              borderRadius: 'var(--lx-radius-md)',
+              color: 'var(--lx-text)',
+              outline: 'none',
+            }}
           />
-          <span className={`block mt-1 text-[10px] ${idConflict ? 'text-red-400' : 'text-white/30'}`}>
+          <span
+            className="block mt-1.5 text-[11px]"
+            style={{ color: idConflict ? 'var(--lx-danger)' : 'var(--lx-text-subtle)' }}
+          >
             {idConflict
               ? `A stack named "${id}" already exists`
               : id
@@ -95,46 +151,55 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
           </span>
         </label>
 
-        <div className="mb-5">
-          <span className="block text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">
+        <div className="mb-6">
+          <span
+            className="block text-[11px] font-medium mb-2"
+            style={{ color: 'var(--lx-text-muted)' }}
+          >
             Format
           </span>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setFormat('a4')}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
-                format === 'a4'
-                  ? 'border-white/40 bg-white/10 text-white'
-                  : 'border-white/10 bg-white/5 text-white/60 hover:text-white hover:border-white/20'
-              }`}
+              className="lx-focus flex items-center gap-2.5 px-3 py-2.5 transition-colors"
+              style={{ ...formatOptionStyle(format === 'a4'), borderRadius: 'var(--lx-radius-md)' }}
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4 flex-shrink-0" strokeWidth={1.75} />
               <div className="text-left">
-                <div className="text-xs font-semibold">A4</div>
-                <div className="text-[10px] text-white/40">Portrait document</div>
+                <div className="text-[13px] font-medium">A4</div>
+                <div className="text-[11px]" style={{ color: 'var(--lx-text-subtle)' }}>
+                  Portrait document
+                </div>
               </div>
             </button>
             <button
               type="button"
               onClick={() => setFormat('slide-16x9')}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
-                format === 'slide-16x9'
-                  ? 'border-white/40 bg-white/10 text-white'
-                  : 'border-white/10 bg-white/5 text-white/60 hover:text-white hover:border-white/20'
-              }`}
+              className="lx-focus flex items-center gap-2.5 px-3 py-2.5 transition-colors"
+              style={{ ...formatOptionStyle(format === 'slide-16x9'), borderRadius: 'var(--lx-radius-md)' }}
             >
-              <Monitor className="w-4 h-4" />
+              <Monitor className="w-4 h-4 flex-shrink-0" strokeWidth={1.75} />
               <div className="text-left">
-                <div className="text-xs font-semibold">16:9</div>
-                <div className="text-[10px] text-white/40">Landscape slides</div>
+                <div className="text-[13px] font-medium">16:9</div>
+                <div className="text-[11px]" style={{ color: 'var(--lx-text-subtle)' }}>
+                  Landscape slides
+                </div>
               </div>
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 rounded p-2 text-[11px] text-red-300 border border-red-500/30 bg-red-500/10">
+          <div
+            className="mb-5 px-3 py-2 text-[12px]"
+            style={{
+              color: 'var(--lx-danger)',
+              background: 'var(--lx-danger-soft)',
+              border: '1px solid rgba(248, 113, 113, 0.25)',
+              borderRadius: 'var(--lx-radius-md)',
+            }}
+          >
             {error}
           </div>
         )}
@@ -143,14 +208,34 @@ export function NewStackModal({ existingIds, onClose, onCreated }: NewStackModal
           <button
             type="button"
             onClick={onClose}
-            className="text-xs px-3 py-2 rounded text-white/60 hover:text-white"
+            className="lx-focus text-[13px] px-3.5 py-2 rounded-[10px] transition-colors"
+            style={{ color: 'var(--lx-text-muted)' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'var(--lx-surface-hover)';
+              e.currentTarget.style.color = 'var(--lx-text)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'var(--lx-text-muted)';
+            }}
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="text-xs px-3 py-2 rounded font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="lx-focus text-[13px] px-3.5 py-2 rounded-[10px] font-medium transition-colors"
+            style={{
+              background: canSubmit ? 'var(--lx-accent)' : 'var(--lx-surface-hover)',
+              color: canSubmit ? 'white' : 'var(--lx-text-faint)',
+              cursor: canSubmit ? 'pointer' : 'not-allowed',
+            }}
+            onMouseEnter={e => {
+              if (canSubmit) e.currentTarget.style.background = 'var(--lx-accent-hover)';
+            }}
+            onMouseLeave={e => {
+              if (canSubmit) e.currentTarget.style.background = 'var(--lx-accent)';
+            }}
           >
             {submitting ? 'Creating…' : 'Create stack'}
           </button>

@@ -86,27 +86,44 @@ export function KbPanel({ stackId }: KbPanelProps) {
     <div className="mb-3" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-left"
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-left transition-colors"
+        onMouseEnter={e => (e.currentTarget.style.background = 'var(--lx-surface-hover)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
-        {expanded ? <ChevronDown className="w-3 h-3 text-white/40" /> : <ChevronRight className="w-3 h-3 text-white/40" />}
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-white/40 flex-1">
+        {expanded ? (
+          <ChevronDown className="w-3 h-3" style={{ color: 'var(--lx-text-subtle)' }} />
+        ) : (
+          <ChevronRight className="w-3 h-3" style={{ color: 'var(--lx-text-subtle)' }} />
+        )}
+        <span
+          className="text-[10px] uppercase tracking-[0.08em] font-semibold flex-1"
+          style={{ color: 'var(--lx-text-subtle)' }}
+        >
           Knowledge base
         </span>
         {files && (
-          <span className="text-[9px] text-white/30">{files.length}</span>
+          <span className="text-[9px] font-medium" style={{ color: 'var(--lx-text-faint)' }}>
+            {files.length}
+          </span>
         )}
         {expanded && (
           <>
             <span
               onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
-              className="text-white/30 hover:text-white/60 cursor-pointer"
+              className="cursor-pointer transition-colors"
+              style={{ color: 'var(--lx-text-subtle)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
               title="Upload"
             >
               <Upload className="w-3 h-3" />
             </span>
             <span
               onClick={e => { e.stopPropagation(); load(); }}
-              className="text-white/30 hover:text-white/60 cursor-pointer"
+              className="cursor-pointer transition-colors"
+              style={{ color: 'var(--lx-text-subtle)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-text)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
               title="Refresh"
             >
               <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
@@ -127,15 +144,34 @@ export function KbPanel({ stackId }: KbPanelProps) {
       />
 
       {expanded && (
-        <div className={`px-2 pt-1 pb-2 text-[11px] rounded transition-colors ${dragOver ? 'bg-blue-500/10 ring-1 ring-blue-400/40' : ''}`}>
+        <div
+          className="px-2 pt-1 pb-2 text-[11px] rounded-[8px] transition-colors"
+          style={
+            dragOver
+              ? {
+                  background: 'var(--lx-accent-soft)',
+                  boxShadow: 'inset 0 0 0 1px var(--lx-accent-ring)',
+                }
+              : undefined
+          }
+        >
           {error && (
-            <div className="text-red-300/80 px-1.5 py-1 whitespace-pre-wrap">{error}</div>
+            <div
+              className="px-1.5 py-1 whitespace-pre-wrap"
+              style={{ color: 'var(--lx-danger)' }}
+            >
+              {error}
+            </div>
           )}
 
           {uploadingNames.length > 0 && (
             <ul className="mb-1">
               {uploadingNames.map(n => (
-                <li key={n} className="flex items-center gap-1.5 px-1.5 py-1 text-white/50">
+                <li
+                  key={n}
+                  className="flex items-center gap-1.5 px-1.5 py-1"
+                  style={{ color: 'var(--lx-text-subtle)' }}
+                >
                   <RefreshCw className="w-3 h-3 animate-spin" />
                   <span className="truncate">{n}</span>
                 </li>
@@ -144,25 +180,59 @@ export function KbPanel({ stackId }: KbPanelProps) {
           )}
 
           {!error && files && files.length === 0 && uploadingNames.length === 0 && (
-            <div className="text-white/30 px-1.5 py-2 leading-relaxed">
-              Empty. Drop files here or click <Upload className="inline w-3 h-3 -mt-0.5" /> to upload.
-              Files live at <code className="text-white/45">kb/</code> inside this stack.
+            <div
+              className="px-1.5 py-2 leading-relaxed"
+              style={{ color: 'var(--lx-text-subtle)' }}
+            >
+              Empty. Drop files here or click{' '}
+              <Upload className="inline w-3 h-3 -mt-0.5" /> to upload. Files live at{' '}
+              <code
+                className="px-1 rounded"
+                style={{
+                  background: 'var(--lx-surface-hover)',
+                  color: 'var(--lx-text-muted)',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                }}
+              >
+                kb/
+              </code>{' '}
+              inside this stack.
             </div>
           )}
 
           {files && files.length > 0 && (
-            <ul className="space-y-0.5">
+            <ul className="space-y-px">
               {files.map(f => (
                 <li
                   key={f.name}
-                  className="group flex items-center gap-1.5 px-1.5 py-1 rounded text-white/60 hover:bg-white/5 hover:text-white/85"
+                  className="group flex items-center gap-1.5 px-1.5 py-1 rounded-[6px] transition-colors"
+                  style={{ color: 'var(--lx-text-muted)' }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'var(--lx-surface-hover)';
+                    e.currentTarget.style.color = 'var(--lx-text)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--lx-text-muted)';
+                  }}
                 >
-                  {f.isDir ? <Folder className="w-3 h-3 flex-shrink-0" /> : <FileText className="w-3 h-3 flex-shrink-0" />}
+                  {f.isDir ? (
+                    <Folder className="w-3 h-3 flex-shrink-0" strokeWidth={1.75} />
+                  ) : (
+                    <FileText className="w-3 h-3 flex-shrink-0" strokeWidth={1.75} />
+                  )}
                   <span className="truncate flex-1">{f.name}</span>
-                  {!f.isDir && <span className="text-[9px] text-white/25">{formatSize(f.size)}</span>}
+                  {!f.isDir && (
+                    <span className="text-[9px] font-medium" style={{ color: 'var(--lx-text-faint)' }}>
+                      {formatSize(f.size)}
+                    </span>
+                  )}
                   <button
                     onClick={() => handleDelete(f.name)}
-                    className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded"
+                    style={{ color: 'var(--lx-text-subtle)' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-danger)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
                     title="Delete"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -173,7 +243,12 @@ export function KbPanel({ stackId }: KbPanelProps) {
           )}
 
           {dragOver && (
-            <div className="mt-2 text-center text-[10px] text-blue-300">Drop to upload</div>
+            <div
+              className="mt-2 text-center text-[10px] font-medium"
+              style={{ color: 'var(--lx-accent-hover)' }}
+            >
+              Drop to upload
+            </div>
           )}
         </div>
       )}

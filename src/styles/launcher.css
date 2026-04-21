@@ -1,0 +1,73 @@
+/*
+ * Launcher design tokens.
+ *
+ * Scope: launcher chrome only (landing grid, stack cards, modals, viewer
+ * sidebar, KB panel). Stack content keeps its own brand theme via
+ * `stacks/<id>/theme.css`; these tokens are intentionally decoupled.
+ *
+ * Aesthetic: modern AI OS. Muted neutrals, one restrained accent, generous
+ * whitespace, soft depth, crisp typography.
+ */
+
+:root {
+  /* Neutrals (near-black background, layered surfaces) */
+  --lx-bg: #0A0A0B;
+  --lx-surface: #131417;
+  --lx-surface-2: #1A1B1F;
+  --lx-surface-hover: #1F2025;
+
+  /* Hairline borders + dividers */
+  --lx-border: rgba(255, 255, 255, 0.07);
+  --lx-border-strong: rgba(255, 255, 255, 0.14);
+  --lx-divider: rgba(255, 255, 255, 0.06);
+
+  /* Text */
+  --lx-text: #F3F4F6;
+  --lx-text-muted: rgba(243, 244, 246, 0.58);
+  --lx-text-subtle: rgba(243, 244, 246, 0.38);
+  --lx-text-faint: rgba(243, 244, 246, 0.22);
+
+  /* Single restrained accent (indigo) */
+  --lx-accent: #6366F1;
+  --lx-accent-hover: #818CF8;
+  --lx-accent-soft: rgba(99, 102, 241, 0.14);
+  --lx-accent-ring: rgba(99, 102, 241, 0.35);
+
+  /* Destructive (used sparingly, for delete affordances) */
+  --lx-danger: #F87171;
+  --lx-danger-soft: rgba(248, 113, 113, 0.12);
+
+  /* Radii */
+  --lx-radius-sm: 6px;
+  --lx-radius-md: 10px;
+  --lx-radius-lg: 14px;
+
+  /* Shadows */
+  --lx-shadow-resting:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  --lx-shadow-elevated:
+    0 20px 40px -12px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Typography */
+  --lx-font-features: "cv11", "ss01", "ss03";
+}
+
+/* Scrollbars inside launcher surfaces — barely there. */
+.lx-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.lx-scroll::-webkit-scrollbar-track { background: transparent; }
+.lx-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.lx-scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.18); background-clip: content-box; }
+
+/* Focus ring helper — subtle, accent-tinted. */
+.lx-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lx-bg), 0 0 0 4px var(--lx-accent-ring);
+}
