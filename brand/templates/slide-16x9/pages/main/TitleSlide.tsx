@@ -28,7 +28,7 @@ export function TitleSlide() {
       className="w-[1280px] h-[720px] flex flex-col relative overflow-hidden"
       style={{
         fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
-        background: onDark ? 'var(--color-dark)' : 'var(--color-light-bg)',
+        background: onDark ? 'var(--color-dark, #1B2332)' : 'var(--color-light-bg, #F5F7FA)',
       }}
     >
       <AccentStripe variant={accentStripe} height={8} />

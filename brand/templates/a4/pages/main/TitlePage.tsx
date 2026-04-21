@@ -29,7 +29,7 @@ export function TitlePage() {
       className="w-[794px] h-[1123px] flex flex-col"
       style={{
         fontFamily: 'var(--font-body, Inter, system-ui, sans-serif)',
-        background: onDark ? 'var(--color-dark)' : 'var(--color-light-bg)',
+        background: onDark ? 'var(--color-dark, #1B2332)' : 'var(--color-light-bg, #F5F7FA)',
       }}
     >
       <AccentStripe variant={accentStripe} height={8} />

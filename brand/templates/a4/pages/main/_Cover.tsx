@@ -12,26 +12,31 @@ interface Props {
 export function CoverBackground({ variant, children, onDarkOverride }: Props) {
   const baseDark = onDarkOverride ?? (variant !== 'solid-light');
 
-  let style: CSSProperties = { background: 'var(--color-dark)' };
+  // Fallback hex values match Kinz v1 so an unthemed first-paint still looks right.
+  const DARK = 'var(--color-dark, #1B2332)';
+  const DARK_SURFACE = 'var(--color-dark-surface, #232B3B)';
+  const LIGHT = 'var(--color-light-bg, #F5F7FA)';
+  const PRIMARY = 'var(--color-primary, #1976D2)';
+
+  let style: CSSProperties = { background: DARK };
 
   if (variant === 'solid-light') {
-    style = { background: 'var(--color-light-bg)' };
+    style = { background: LIGHT };
   } else if (variant === 'gradient-radial') {
     style = {
-      background: `radial-gradient(circle at 20% 25%, var(--color-primary) 0%, var(--color-dark) 55%), var(--color-dark)`,
+      background: `radial-gradient(circle at 20% 25%, ${PRIMARY} 0%, ${DARK} 55%), ${DARK}`,
     };
   } else if (variant === 'gradient-linear') {
     style = {
-      background: `linear-gradient(135deg, var(--color-primary) 0%, var(--color-dark) 70%, var(--color-dark-surface) 100%)`,
+      background: `linear-gradient(135deg, ${PRIMARY} 0%, ${DARK} 70%, ${DARK_SURFACE} 100%)`,
     };
   } else if (variant === 'split') {
     style = {
-      background: `linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary) 42%, var(--color-dark) 42%, var(--color-dark) 100%)`,
+      background: `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY} 42%, ${DARK} 42%, ${DARK} 100%)`,
     };
   } else if (variant === 'image-led') {
-    // Image-led: dark base with a subtle vignette; consumer provides imagery.
     style = {
-      background: `linear-gradient(180deg, rgba(0,0,0,0.25) 0%, var(--color-dark) 70%)`,
+      background: `linear-gradient(180deg, rgba(0,0,0,0.25) 0%, ${DARK} 70%)`,
     };
   }
 
