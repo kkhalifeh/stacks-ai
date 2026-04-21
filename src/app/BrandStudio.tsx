@@ -17,6 +17,7 @@ import {
   type ThemeProposal,
 } from './brand-api';
 import { applyRawTheme, tenant as initialTenant, tenantTemplates, type TenantThemeInfo } from './stacks';
+import { ReferencesPanel } from './components/brand/ReferencesPanel';
 import { A4TitleSample } from './preview/A4TitleSample';
 import { A4ContentSample } from './preview/A4ContentSample';
 import { SlideTitleSample } from './preview/SlideTitleSample';
@@ -340,6 +341,8 @@ export function BrandStudio({ onBack }: BrandStudioProps) {
               </ul>
             )}
           </div>
+
+          <ReferencesPanel />
 
           {/* Keywords */}
           <label className="block">

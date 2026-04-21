@@ -35,6 +35,13 @@ export interface TenantBrand {
   themes: ThemeMeta[];
 }
 
+export interface BrandReference {
+  name: string;
+  size: number;
+  kind: 'image' | 'document';
+  mediaType: string;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -107,6 +114,36 @@ export async function deleteTheme(id: string): Promise<{ deleted: string }> {
 export function tenantLogoUrl(cacheBust?: number): string {
   const q = cacheBust ? `?t=${cacheBust}` : '';
   return `/__api/brand/logo${q}`;
+}
+
+export async function listReferences(): Promise<{ references: BrandReference[] }> {
+  const res = await fetch('/__api/brand/references');
+  return handle(res);
+}
+
+export async function uploadReference(file: File): Promise<{ name: string; size: number }> {
+  const contentType = file.type || guessContentType(file.name);
+  const res = await fetch(`/__api/brand/references/${encodeURIComponent(file.name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: file,
+  });
+  return handle(res);
+}
+
+export async function deleteReference(name: string): Promise<{ deleted: string }> {
+  const res = await fetch(`/__api/brand/references/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  return handle(res);
+}
+
+function guessContentType(name: string): string {
+  const ext = name.toLowerCase().split('.').pop();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'pdf') return 'application/pdf';
+  return 'application/octet-stream';
 }
 
 export function proposalToCssVars(p: ThemeProposal): string {

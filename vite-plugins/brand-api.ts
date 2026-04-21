@@ -6,9 +6,11 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const BRAND_DIR = 'brand';
 const THEMES_SUBDIR = 'themes';
+const REFERENCES_SUBDIR = 'references';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const THEME_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const REFERENCE_FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ \-()]{0,200}$/;
 
 interface BrandApiOptions {
   apiKey?: string;
@@ -176,6 +178,47 @@ function mediaTypeForExt(name: string): 'image/png' | 'image/jpeg' | 'image/gif'
   return 'image/png';
 }
 
+/** Classify a reference file by extension for Claude's vision/document API. */
+function classifyReference(name: string): { kind: 'image' | 'document'; mediaType: string } | null {
+  const ext = path.extname(name).toLowerCase();
+  if (ext === '.png') return { kind: 'image', mediaType: 'image/png' };
+  if (ext === '.jpg' || ext === '.jpeg') return { kind: 'image', mediaType: 'image/jpeg' };
+  if (ext === '.gif') return { kind: 'image', mediaType: 'image/gif' };
+  if (ext === '.webp') return { kind: 'image', mediaType: 'image/webp' };
+  if (ext === '.pdf') return { kind: 'document', mediaType: 'application/pdf' };
+  return null;
+}
+
+function safeReferenceName(name: string): string | null {
+  const base = path.basename(name);
+  if (!REFERENCE_FILENAME_RE.test(base)) return null;
+  if (!classifyReference(base)) return null;
+  return base;
+}
+
+interface ReferenceFile {
+  name: string;
+  size: number;
+  kind: 'image' | 'document';
+  mediaType: string;
+}
+
+async function listReferences(brandDir: string): Promise<ReferenceFile[]> {
+  const dir = path.join(brandDir, REFERENCES_SUBDIR);
+  if (!(await exists(dir))) return [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const out: ReferenceFile[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name.startsWith('.')) continue;
+    const cls = classifyReference(entry.name);
+    if (!cls) continue;
+    const stat = await fs.stat(path.join(dir, entry.name));
+    out.push({ name: entry.name, size: stat.size, kind: cls.kind, mediaType: cls.mediaType });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
+
 interface ThemeMeta {
   id: string;
   name: string;
@@ -318,13 +361,34 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             const imageBase64 = (await fs.readFile(logo.abs)).toString('base64');
             const mediaType = mediaTypeForExt(logo.name);
 
+            // Attach any reference files the user dropped in (images + PDFs) as additional context.
+            const refs = await listReferences(brandDir);
+            const refBlocks: Array<Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> = [];
+            for (const ref of refs) {
+              const data = (await fs.readFile(path.join(brandDir, REFERENCES_SUBDIR, ref.name))).toString('base64');
+              if (ref.kind === 'image') {
+                refBlocks.push({
+                  type: 'image',
+                  source: { type: 'base64', media_type: ref.mediaType as 'image/png', data },
+                });
+              } else {
+                refBlocks.push({
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data },
+                });
+              }
+            }
+
             const client = new Anthropic({ apiKey });
             const userText = [
               `Brand name: ${body.name ?? 'Unnamed'}`,
               body.keywords ? `Keywords / tone: ${body.keywords}` : '',
               body.feedback ? `User feedback (act on this): ${body.feedback}` : '',
+              refs.length
+                ? `The user attached ${refs.length} reference file(s) (${refs.map(r => r.name).join(', ')}). Treat them as style inspiration — match their mood, typographic feel, color temperature, layout weight, and overall tone. Do NOT simply copy their literal colors; pull primary + accents from the logo. References inform the neutrals, radii, shadows, and typography pairing.`
+                : '',
               '',
-              'Analyze the uploaded logo. Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 documents and 16:9 slide decks. Precise hex values. Neutrals (text, light_bg, dark, border) should pair well with the logo but need not be logo-derived.',
+              'Analyze the uploaded logo first (it is the first image). Extract the dominant palette (for `primary` and `accents`, pull colors directly from the logo). Propose a complete brand theme usable for both A4 documents and 16:9 slide decks. Precise hex values. Neutrals (text, light_bg, dark, border) should pair well with the logo and reflect the feel of any reference materials.',
             ].filter(Boolean).join('\n');
 
             try {
@@ -337,6 +401,7 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
                   role: 'user',
                   content: [
                     { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+                    ...refBlocks,
                     { type: 'text', text: userText },
                   ],
                 }],
@@ -349,10 +414,47 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
                 proposal: toolBlock.input as ThemeProposal,
                 model,
                 usage: response.usage,
+                referencesUsed: refs.map(r => r.name),
               });
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               return sendJson(res, 502, { error: `Claude API error: ${msg}` });
+            }
+          }
+
+          // GET /__api/brand/references — list uploaded reference files
+          if (rest === 'references' && method === 'GET') {
+            const refs = await listReferences(brandDir);
+            return sendJson(res, 200, { references: refs });
+          }
+
+          // Per-reference: POST /__api/brand/references/:filename, DELETE /__api/brand/references/:filename
+          const refRoute = rest.match(/^references\/(.+)$/);
+          if (refRoute) {
+            const raw = decodeURIComponent(refRoute[1]);
+            const name = safeReferenceName(raw);
+            if (!name) {
+              return sendJson(res, 400, { error: 'Invalid reference filename (allowed: letters/digits/dashes/dots/underscores/spaces, ext .png/.jpg/.jpeg/.gif/.webp/.pdf).' });
+            }
+            const refsDir = path.join(brandDir, REFERENCES_SUBDIR);
+            const target = path.join(refsDir, name);
+
+            if (method === 'POST') {
+              await fs.mkdir(refsDir, { recursive: true });
+              try {
+                const body = await readBinaryBody(req, MAX_UPLOAD_BYTES);
+                await fs.writeFile(target, body);
+                return sendJson(res, 201, { name, size: body.length });
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return sendJson(res, 413, { error: msg });
+              }
+            }
+
+            if (method === 'DELETE') {
+              if (!(await exists(target))) return sendJson(res, 404, { error: 'Reference not found' });
+              await fs.rm(target, { force: true });
+              return sendJson(res, 200, { deleted: name });
             }
           }
 

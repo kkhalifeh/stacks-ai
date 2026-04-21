@@ -136,9 +136,11 @@ Pages are plain React components; the optional `Canvas` wrapper in `src/app/comp
 ## Brand Studio flow (tenant level)
 
 1. User opens `?view=brand` from landing
-2. Upload logo + (optional) brand name + keywords → POST `/__api/brand/logo`
-3. Generate theme → POST `/__api/brand/generate` → Claude vision returns structured `ThemeProposal`
-4. Preview tabs (A4 Title/Content, Slide Title/Content) render tenant templates with the proposal scoped via `.brand-preview-tenant`
-5. Save as new theme → POST `/__api/brand/themes` writes `brand/themes/<slug>/{theme.css, meta.json}`
-6. Set default → POST `/__api/brand/themes/<id>/default` updates `tenant.json.activeThemeId`
-7. When creating a new stack, NewStackModal can snapshot a specific saved theme into the stack's own `theme/theme.css`
+2. Upload logo → POST `/__api/brand/logo`
+3. Optional: drop PDFs or images into the **style references** panel → POST `/__api/brand/references/:filename`. Each reference is stored at `brand/references/` and attached to every generate call thereafter. Images (`.png .jpg .jpeg .gif .webp`) and PDFs (`.pdf`) only. Max 10 MB per file. Managed via `GET /__api/brand/references` (list) and `DELETE /__api/brand/references/:filename`
+4. Fill brand name + optional keywords
+5. Generate theme → POST `/__api/brand/generate` → Claude vision receives: the logo (first image), every reference file (image or document blocks), and the text prompt. Returns a structured `ThemeProposal`. Primary + accent colors are drawn from the logo; references inform neutrals, radii, shadows, typography pairing, and overall mood
+6. Preview tabs (A4 Title/Content, Slide Title/Content) render tenant templates with the proposal scoped via `.brand-preview-tenant`
+7. Save as new theme → POST `/__api/brand/themes` writes `brand/themes/<slug>/{theme.css, meta.json}`
+8. Set default → POST `/__api/brand/themes/<id>/default` updates `tenant.json.activeThemeId`
+9. When creating a new stack, NewStackModal can snapshot a specific saved theme into the stack's own `theme/theme.css`
