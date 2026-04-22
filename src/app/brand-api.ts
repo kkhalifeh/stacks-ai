@@ -1,8 +1,18 @@
-export type CoverStyle = 'solid-dark' | 'solid-light' | 'gradient-radial' | 'gradient-linear' | 'split' | 'image-led';
+export type CoverStyle =
+  | 'solid-dark'
+  | 'solid-light'
+  | 'gradient-radial'
+  | 'gradient-linear'
+  | 'split'
+  | 'image-led'
+  | 'typographic-poster'
+  | 'editorial-spread';
 export type AccentStripe = 'rainbow-6' | 'triplet' | 'single-bar' | 'corner-mark' | 'none';
 export type ShapeLanguage = 'sharp' | 'rounded' | 'soft-organic';
 export type ContentGrid = 'single-column' | 'two-column' | 'three-column-cards';
 export type TitleEmphasis = 'large-heading' | 'display-eyebrow' | 'stacked-labels';
+export type LogoTreatment = 'primary' | 'light' | 'mono-light' | 'mono-dark' | 'auto-invert';
+export type LogoVariant = 'primary' | 'light' | 'mono';
 
 export interface ThemeProposal {
   description: string;
@@ -31,6 +41,10 @@ export interface ThemeProposal {
     content_grid: ContentGrid;
     title_emphasis: TitleEmphasis;
   };
+  logo_treatment?: {
+    cover: LogoTreatment;
+    content: LogoTreatment;
+  };
 }
 
 export interface ThemeMeta {
@@ -53,6 +67,7 @@ export interface TenantBrand {
   name: string;
   subtitle: string;
   logo: string | null;
+  logoVariants?: { primary: string | null; light: string | null; mono: string | null };
   activeThemeId: string | null;
   themes: ThemeMeta[];
 }
@@ -114,8 +129,13 @@ export async function updateBrand(id: string, patch: { name?: string; subtitle?:
   return handle(res);
 }
 
-export async function uploadBrandLogo(id: string, file: File): Promise<{ name: string; size: number }> {
-  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}/logo`, {
+export async function uploadBrandLogo(
+  id: string,
+  file: File,
+  variant: LogoVariant = 'primary',
+): Promise<{ name: string; size: number; variant: LogoVariant }> {
+  const q = variant === 'primary' ? '' : `?variant=${variant}`;
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}/logo${q}`, {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'image/png' },
     body: file,
@@ -123,9 +143,22 @@ export async function uploadBrandLogo(id: string, file: File): Promise<{ name: s
   return handle(res);
 }
 
-export function brandLogoUrl(id: string, cacheBust?: number): string {
-  const q = cacheBust ? `?t=${cacheBust}` : '';
-  return `/__api/brands/${encodeURIComponent(id)}/logo${q}`;
+export async function deleteBrandLogoVariant(
+  id: string,
+  variant: Exclude<LogoVariant, 'primary'>,
+): Promise<{ deleted: string; variant: LogoVariant }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(id)}/logo?variant=${variant}`, {
+    method: 'DELETE',
+  });
+  return handle(res);
+}
+
+export function brandLogoUrl(id: string, cacheBust?: number, variant: LogoVariant = 'primary'): string {
+  const params = new URLSearchParams();
+  if (variant !== 'primary') params.set('variant', variant);
+  if (cacheBust) params.set('t', String(cacheBust));
+  const q = params.toString();
+  return `/__api/brands/${encodeURIComponent(id)}/logo${q ? `?${q}` : ''}`;
 }
 
 // ─── Per-brand: generation + themes ─────────────────────────────
@@ -138,6 +171,18 @@ export async function generateBrandTheme(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ count: 3, ...input }),
+  });
+  return handle(res);
+}
+
+export async function refineBrandTheme(
+  brandId: string,
+  input: { previous: ThemeProposal; feedback: string; name?: string; keywords?: string },
+): Promise<{ proposal: ThemeProposal; model: string }> {
+  const res = await fetch(`/__api/brands/${encodeURIComponent(brandId)}/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
   });
   return handle(res);
 }
@@ -248,6 +293,8 @@ export function proposalToCssVars(p: ThemeProposal): string {
     --shape-language: ${p.structural?.shape_language ?? 'rounded'};
     --content-grid: ${p.structural?.content_grid ?? 'three-column-cards'};
     --title-emphasis: ${p.structural?.title_emphasis ?? 'large-heading'};
+    --logo-cover-treatment: ${p.logo_treatment?.cover ?? 'primary'};
+    --logo-content-treatment: ${p.logo_treatment?.content ?? 'primary'};
   `.trim();
 }
 

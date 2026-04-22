@@ -18,11 +18,20 @@ interface BrandApiOptions {
   model?: string;
 }
 
-export type CoverStyle = 'solid-dark' | 'solid-light' | 'gradient-radial' | 'gradient-linear' | 'split' | 'image-led';
+export type CoverStyle =
+  | 'solid-dark'
+  | 'solid-light'
+  | 'gradient-radial'
+  | 'gradient-linear'
+  | 'split'
+  | 'image-led'
+  | 'typographic-poster'
+  | 'editorial-spread';
 export type AccentStripe = 'rainbow-6' | 'triplet' | 'single-bar' | 'corner-mark' | 'none';
 export type ShapeLanguage = 'sharp' | 'rounded' | 'soft-organic';
 export type ContentGrid = 'single-column' | 'two-column' | 'three-column-cards';
 export type TitleEmphasis = 'large-heading' | 'display-eyebrow' | 'stacked-labels';
+export type LogoTreatment = 'primary' | 'light' | 'mono-light' | 'mono-dark' | 'auto-invert';
 
 export interface ThemeProposal {
   description: string;
@@ -51,14 +60,28 @@ export interface ThemeProposal {
     content_grid: ContentGrid;
     title_emphasis: TitleEmphasis;
   };
+  logo_treatment?: {
+    cover: LogoTreatment;
+    content: LogoTreatment;
+  };
 }
+
+const LOGO_TREATMENT_SCHEMA = {
+  type: 'string',
+  enum: ['primary', 'light', 'mono-light', 'mono-dark', 'auto-invert'],
+  description:
+    "How the logo renders on this surface. 'primary' = use the uploaded logo as-is. 'light' = use the uploaded logo-light variant (falls back to auto-invert if not uploaded). 'mono-light' = force a single-ink white rendering (uses logo-mono if uploaded, else filters to white). 'mono-dark' = force a single-ink black rendering. 'auto-invert' = last-resort filter that turns a dark silhouette white — pick this for a dark-only emblem placed on a dark surface when no light variant exists.",
+} as const;
+
+const REFINE_TOOL_SCHEMA_DESCRIPTION =
+  'Refine a previously-proposed brand theme based on user feedback. Return a MINIMAL-DELTA revision: hold palette, typography, structural tokens, and logo_treatment constant unless the feedback specifically targets them. Only change what the feedback calls out. The output schema is identical to propose_brand_theme.';
 
 const TOOL_SCHEMA = {
   name: 'propose_brand_theme',
   description: 'Propose a complete brand theme based on an uploaded logo and optional brand context.',
   input_schema: {
     type: 'object',
-    required: ['description', 'palette', 'typography', 'radii', 'shadows', 'structural'],
+    required: ['description', 'palette', 'typography', 'radii', 'shadows', 'structural', 'logo_treatment'],
     properties: {
       description: { type: 'string', description: '3-4 sentence rationale.' },
       palette: {
@@ -96,8 +119,18 @@ const TOOL_SCHEMA = {
         properties: {
           cover_style: {
             type: 'string',
-            enum: ['solid-dark', 'solid-light', 'gradient-radial', 'gradient-linear', 'split', 'image-led'],
-            description: 'Treatment for title pages/slides. solid-dark = dark wall (current Kinz default). solid-light = light/cream wall. gradient-radial = soft radial wash in brand colors. gradient-linear = two-tone angled gradient. split = two colored halves. image-led = large focal imagery area.',
+            enum: [
+              'solid-dark',
+              'solid-light',
+              'gradient-radial',
+              'gradient-linear',
+              'split',
+              'image-led',
+              'typographic-poster',
+              'editorial-spread',
+            ],
+            description:
+              'Composition archetype for title pages/slides. Each is a distinct layout, not just a different fill — pick to match the brand\'s personality. solid-dark = dark wall with title + accent. solid-light = light/cream wall. gradient-radial = soft radial wash in brand colors. gradient-linear = two-tone angled gradient. split = two colored halves, title in one. image-led = large focal imagery area behind the title. typographic-poster = oversized title dominates the canvas, tiny corner logo, no accent stripe — editorial/statement brands. editorial-spread = asymmetric two-column: large headline + rule on the left, stacked metadata on the right, logo in the metadata column — publication/consulting brands.',
           },
           accent_stripe: {
             type: 'string',
@@ -119,6 +152,16 @@ const TOOL_SCHEMA = {
             enum: ['large-heading', 'display-eyebrow', 'stacked-labels'],
             description: 'How the title page reads. large-heading = big title dominates. display-eyebrow = small eyebrow label + big statement. stacked-labels = multiple small labels stacked.',
           },
+        },
+      },
+      logo_treatment: {
+        type: 'object',
+        description:
+          "How the logo should render per surface. MUST respect contrast: never place a dark logo on a dark surface without selecting 'light', 'mono-light', or 'auto-invert'. If the uploaded logo is a dark silhouette and you pick a dark cover_style (solid-dark, gradient-radial, gradient-linear, split, image-led, typographic-poster on dark, editorial-spread on dark), then cover MUST be 'light', 'mono-light', or 'auto-invert'. Content pages typically render on white, so content stays 'primary' unless the brand wants a mono look.",
+        required: ['cover', 'content'],
+        properties: {
+          cover: LOGO_TREATMENT_SCHEMA,
+          content: LOGO_TREATMENT_SCHEMA,
         },
       },
     },
@@ -248,16 +291,45 @@ function proposalToCss(proposal: ThemeProposal, themeName: string): string {
   --shape-language: ${proposal.structural?.shape_language ?? 'rounded'};
   --content-grid: ${proposal.structural?.content_grid ?? 'three-column-cards'};
   --title-emphasis: ${proposal.structural?.title_emphasis ?? 'large-heading'};
+
+  /* Surface-aware logo treatments. Templates read these to pick the right asset or filter. */
+  --logo-cover-treatment: ${proposal.logo_treatment?.cover ?? 'primary'};
+  --logo-content-treatment: ${proposal.logo_treatment?.content ?? 'primary'};
 }
 `;
 }
 
-async function findLogoFile(brandDir: string): Promise<{ abs: string; name: string } | null> {
+type LogoVariantKind = 'primary' | 'light' | 'mono';
+
+function logoFilePattern(variant: LogoVariantKind): RegExp {
+  if (variant === 'primary') return /^logo\.(png|jpg|jpeg|gif|webp|svg)$/i;
+  if (variant === 'light') return /^logo-light\.(png|jpg|jpeg|gif|webp|svg)$/i;
+  return /^logo-mono\.(png|jpg|jpeg|gif|webp|svg)$/i;
+}
+
+async function findLogoFile(
+  brandDir: string,
+  variant: LogoVariantKind = 'primary',
+): Promise<{ abs: string; name: string } | null> {
   if (!(await exists(brandDir))) return null;
   const files = await fs.readdir(brandDir);
-  const logos = files.filter(f => /^logo\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
-  if (!logos.length) return null;
-  return { abs: path.join(brandDir, logos[0]), name: logos[0] };
+  const pattern = logoFilePattern(variant);
+  const match = files.find(f => pattern.test(f));
+  if (!match) return null;
+  return { abs: path.join(brandDir, match), name: match };
+}
+
+async function listLogoVariants(brandDir: string): Promise<Record<LogoVariantKind, string | null>> {
+  const [primary, light, mono] = await Promise.all([
+    findLogoFile(brandDir, 'primary'),
+    findLogoFile(brandDir, 'light'),
+    findLogoFile(brandDir, 'mono'),
+  ]);
+  return {
+    primary: primary?.name ?? null,
+    light: light?.name ?? null,
+    mono: mono?.name ?? null,
+  };
 }
 
 function mediaTypeForExt(name: string): 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' {
@@ -457,12 +529,13 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
           if (!rest && method === 'GET') {
             await fs.mkdir(brandDir, { recursive: true });
             const manifest = await readManifest();
-            const logo = await findLogoFile(brandDir);
+            const variants = await listLogoVariants(brandDir);
             const themes = await readThemesDir(brandDir);
             return sendJson(res, 200, {
               name: manifest.name ?? 'My Brand',
               subtitle: manifest.subtitle ?? '',
-              logo: logo?.name ?? null,
+              logo: variants.primary,
+              logoVariants: variants,
               activeThemeId: manifest.activeThemeId ?? null,
               themes,
             });
@@ -481,9 +554,14 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             return sendJson(res, 200, { name: manifest.name, subtitle: manifest.subtitle });
           }
 
-          // GET /__api/brand/logo
+          // GET /__api/brand/logo[?variant=light|mono] — falls back to primary if variant missing
           if (rest === 'logo' && method === 'GET') {
-            const logo = await findLogoFile(brandDir);
+            const qs = new URL(url, 'http://x').searchParams;
+            const requested = (qs.get('variant') ?? 'primary') as LogoVariantKind;
+            const variant: LogoVariantKind =
+              requested === 'light' || requested === 'mono' ? requested : 'primary';
+            let logo = await findLogoFile(brandDir, variant);
+            if (!logo && variant !== 'primary') logo = await findLogoFile(brandDir, 'primary');
             if (!logo) return sendJson(res, 404, { error: 'No logo uploaded' });
             const data = await fs.readFile(logo.abs);
             res.statusCode = 200;
@@ -492,10 +570,31 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             return;
           }
 
-          // POST /__api/brand/logo
+          // DELETE /__api/brand/logo[?variant=light|mono]
+          if (rest === 'logo' && method === 'DELETE') {
+            const qs = new URL(url, 'http://x').searchParams;
+            const requested = (qs.get('variant') ?? 'primary') as LogoVariantKind;
+            const variant: LogoVariantKind =
+              requested === 'light' || requested === 'mono' ? requested : 'primary';
+            const logo = await findLogoFile(brandDir, variant);
+            if (!logo) return sendJson(res, 404, { error: 'No such logo variant' });
+            await fs.rm(logo.abs, { force: true });
+            if (variant === 'primary') {
+              const manifest = await readManifest();
+              manifest.logo = null;
+              await writeManifest(manifest);
+            }
+            return sendJson(res, 200, { deleted: logo.name, variant });
+          }
+
+          // POST /__api/brand/logo[?variant=light|mono]
           if (rest === 'logo' && method === 'POST') {
             await fs.mkdir(brandDir, { recursive: true });
-            const existing = await findLogoFile(brandDir);
+            const qs = new URL(url, 'http://x').searchParams;
+            const requested = (qs.get('variant') ?? 'primary') as LogoVariantKind;
+            const variant: LogoVariantKind =
+              requested === 'light' || requested === 'mono' ? requested : 'primary';
+            const existing = await findLogoFile(brandDir, variant);
             if (existing) await fs.rm(existing.abs, { force: true });
 
             const contentType = (req.headers['content-type'] ?? 'image/png').toLowerCase();
@@ -506,12 +605,16 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
             else if (contentType.includes('svg')) ext = '.svg';
 
             const body = await readBinaryBody(req, MAX_UPLOAD_BYTES);
-            const target = path.join(brandDir, `logo${ext}`);
+            const stem = variant === 'primary' ? 'logo' : `logo-${variant}`;
+            const filename = `${stem}${ext}`;
+            const target = path.join(brandDir, filename);
             await fs.writeFile(target, body);
-            const manifest = await readManifest();
-            manifest.logo = `logo${ext}`;
-            await writeManifest(manifest);
-            return sendJson(res, 201, { name: `logo${ext}`, size: body.length });
+            if (variant === 'primary') {
+              const manifest = await readManifest();
+              manifest.logo = filename;
+              await writeManifest(manifest);
+            }
+            return sendJson(res, 201, { name: filename, size: body.length, variant });
           }
 
           // POST /__api/brand/generate — Claude call, returns proposal (not saved)
@@ -539,20 +642,23 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               },
               {
                 label: 'Editorial',
-                nudge: 'Editorial direction: pull toward a restrained, more serious treatment. Serif or refined sans typography. Muted palette with strong contrast. cover_style biased toward solid-light or solid-dark. accent_stripe biased toward single-bar or corner-mark. Minimal decoration.',
+                nudge: 'Editorial direction: consulting / publication feel. Serif or refined sans typography (Fraunces, Instrument Serif, DM Serif, Playfair Display paired with Inter). Muted palette with strong contrast. cover_style biased toward editorial-spread or solid-light. accent_stripe biased toward single-bar or corner-mark. Minimal decoration, tight hierarchy.',
               },
               {
                 label: 'Expressive',
-                nudge: 'Expressive direction: push bolder and more experimental. Saturated primary, unusual neutral temperature (warm cream, deep plum, etc.). Display typography (Bricolage Grotesque, Fraunces, Space Grotesk). cover_style biased toward gradient-radial, gradient-linear, or split. accent_stripe biased toward rainbow-6 or triplet.',
+                nudge: 'Expressive direction: bold statement. Saturated primary, unusual neutral temperature (warm cream, deep plum, ink black). Display typography (Bricolage Grotesque, Fraunces Variable, Space Grotesk, DM Serif Display). cover_style biased toward typographic-poster, gradient-radial, or gradient-linear. accent_stripe biased toward rainbow-6, triplet, or none if the composition is the statement.',
               },
               {
                 label: 'Minimal',
-                nudge: 'Minimal direction: strip to essentials. Near-monochrome palette using one logo hue. Geometric sans (Inter/Manrope) at tight weights. cover_style solid-light or solid-dark. accent_stripe none or corner-mark. Sharp shape_language.',
+                nudge: 'Minimal direction: strip to essentials. Near-monochrome palette using one logo hue. Geometric sans (Inter/Manrope) at tight weights. cover_style solid-light, typographic-poster on light, or solid-dark. accent_stripe none or corner-mark. Sharp shape_language.',
               },
             ];
 
             const imageBase64 = (await fs.readFile(logo.abs)).toString('base64');
             const mediaType = mediaTypeForExt(logo.name);
+            const logoVariantMap = await listLogoVariants(brandDir);
+            const uploadedVariants: Array<'primary' | 'light' | 'mono'> = ['primary', 'light', 'mono']
+              .filter(k => logoVariantMap[k as 'primary' | 'light' | 'mono']) as Array<'primary' | 'light' | 'mono'>;
 
             // Attach any reference files the user dropped in (images + PDFs) as additional context.
             const refs = await listReferences(brandDir);
@@ -600,8 +706,20 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
               `  - "bold/statement" → heavy display: Anton, Archivo Black, Bricolage Grotesque Bold`,
               `- heading_font and body_font may be the same OR different (often more impactful when different).`,
               ``,
+              `# How to pick structural choices`,
+              `- **cover_style**: pick the COMPOSITION that matches the brand, not just the fill. \`typographic-poster\` is a strong statement layout — the title is the hero, logo becomes a tiny corner mark, accent stripe disappears. \`editorial-spread\` is a consulting/publication layout — asymmetric two-column with a large headline left, metadata right. Use these to break out of the "accent stripe + title + subtitle" mold when the brand warrants it (confident, editorial, statement, fashion, architecture, luxury, publication).`,
+              `- **content_grid** should track cover_style where it makes sense. A poster-style brand usually wants \`single-column\` or \`two-column\`, not three cards. A consulting brand often wants cards.`,
+              ``,
+              `# Logo treatment (mandatory — contrast rule)`,
+              `You MUST return \`logo_treatment\` for both cover and content surfaces. Look at the logo image and decide: is it a dark silhouette (near-black ink, deep navy, etc.) or does it have light/multicolor components?`,
+              `- If the logo is dark AND you picked a dark cover_style (solid-dark, gradient-radial, gradient-linear, split, image-led on dark, or editorial-spread/typographic-poster on dark), then \`logo_treatment.cover\` MUST be one of: 'light', 'mono-light', or 'auto-invert'. Never put a dark logo on a dark surface.`,
+              `- If the logo is light/white AND you picked a light cover_style (solid-light, or poster on cream), then \`logo_treatment.cover\` must be 'primary' or 'mono-dark' — never leave a white logo on a light surface.`,
+              `- Content pages render on white by default, so \`logo_treatment.content\` is almost always 'primary' (keep the logo as the user uploaded it). Only choose 'mono-dark' on content if the brand is explicitly monochrome.`,
+              `- Uploaded logo variants available for this brand: ${uploadedVariants.join(', ')}. Prefer 'light' or 'mono-light' when the corresponding variant is uploaded; otherwise \`auto-invert\` is a last-resort filter that will force a dark silhouette to white.`,
+              ``,
               `# Differentiation mandate`,
               `If feedback is present, your proposal MUST visibly differ from the previous proposal — shift the primary hue meaningfully, try a different typographic personality, or re-tune neutrals. Do not return near-identical palettes across successive generations.`,
+              `Across variants, vary cover_style boldly — don't default every variant to the same composition. If one variant is \`solid-dark\`, another should try \`typographic-poster\` or \`editorial-spread\` or \`gradient-radial\`, not another dark wall.`,
             ].filter(Boolean).join('\n');
 
             try {
@@ -648,6 +766,108 @@ export function brandApi(opts: BrandApiOptions = {}): Plugin {
                 proposal: variants[0].proposal,
                 model,
                 referencesUsed: refs.map(r => r.name),
+              });
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              return sendJson(res, 502, { error: `Claude API error: ${msg}` });
+            }
+          }
+
+          // POST /__api/brand/refine — minimal-delta revision of a previous proposal
+          if (rest === 'refine' && method === 'POST') {
+            if (!apiKey) {
+              return sendJson(res, 500, {
+                error: 'ANTHROPIC_API_KEY is not set. Create .env.local with ANTHROPIC_API_KEY=... and restart the dev server.',
+              });
+            }
+
+            const logo = await findLogoFile(brandDir);
+            if (!logo) {
+              return sendJson(res, 400, { error: 'Upload a logo first.' });
+            }
+
+            let body: { previous: ThemeProposal; feedback: string; name?: string; keywords?: string };
+            try { body = await readJsonBody(req); }
+            catch { return sendJson(res, 400, { error: 'Invalid JSON' }); }
+
+            if (!body.previous || !body.previous.palette) {
+              return sendJson(res, 400, { error: 'previous proposal is required' });
+            }
+            const feedback = (body.feedback ?? '').trim();
+            if (!feedback) {
+              return sendJson(res, 400, { error: 'feedback is required' });
+            }
+
+            const imageBase64 = (await fs.readFile(logo.abs)).toString('base64');
+            const mediaType = mediaTypeForExt(logo.name);
+            const logoVariantMap = await listLogoVariants(brandDir);
+            const uploadedVariants = (['primary', 'light', 'mono'] as const).filter(
+              k => logoVariantMap[k],
+            );
+
+            const refs = await listReferences(brandDir);
+            const refBlocks: Array<Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> = [];
+            for (const ref of refs) {
+              const data = (await fs.readFile(path.join(brandDir, REFERENCES_SUBDIR, ref.name))).toString('base64');
+              if (ref.kind === 'image') {
+                refBlocks.push({
+                  type: 'image',
+                  source: { type: 'base64', media_type: ref.mediaType as 'image/png', data },
+                });
+              } else {
+                refBlocks.push({
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data },
+                });
+              }
+            }
+
+            const client = new Anthropic({ apiKey });
+            const userText = [
+              `# Your job`,
+              `${REFINE_TOOL_SCHEMA_DESCRIPTION}`,
+              ``,
+              `# The previous proposal (JSON)`,
+              '```json',
+              JSON.stringify(body.previous, null, 2),
+              '```',
+              ``,
+              `# User feedback on that proposal`,
+              `"${feedback}"`,
+              ``,
+              body.name ? `# Brand name\n"${body.name}"` : '',
+              body.keywords ? `# Keywords / tone\n"${body.keywords}"` : '',
+              ``,
+              `# Rules`,
+              `- Apply the feedback literally. If the user said "make the logo white on the title", that maps to \`logo_treatment.cover\` = 'light' or 'mono-light' or 'auto-invert' (pick based on available variants: ${uploadedVariants.join(', ')}).`,
+              `- If the user said "keep the content logo as-is" / "keep the black logo on content", that maps to \`logo_treatment.content\` = 'primary'.`,
+              `- DO NOT re-roll the palette, typography, structural tokens, or shadows unless the feedback specifically asks for it. Return the previous values verbatim for untouched fields.`,
+              `- You MUST still respect the contrast rule: never place a dark logo on a dark surface without 'light', 'mono-light', or 'auto-invert'.`,
+              `- Return a single proposal via the propose_brand_theme tool. Update the \`description\` field to note what changed and why.`,
+            ].filter(Boolean).join('\n');
+
+            try {
+              const response = await client.messages.create({
+                model,
+                max_tokens: 2000,
+                tools: [TOOL_SCHEMA as unknown as Anthropic.Tool],
+                tool_choice: { type: 'tool', name: 'propose_brand_theme' },
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+                    ...refBlocks,
+                    { type: 'text', text: userText },
+                  ],
+                }],
+              });
+              const toolBlock = response.content.find(b => b.type === 'tool_use');
+              if (!toolBlock || toolBlock.type !== 'tool_use') {
+                return sendJson(res, 502, { error: 'Claude did not return a structured proposal.' });
+              }
+              return sendJson(res, 200, {
+                proposal: toolBlock.input as ThemeProposal,
+                model,
               });
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);

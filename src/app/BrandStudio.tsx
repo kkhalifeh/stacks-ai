@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Check, Image as ImageIcon, Sparkles, Star, Trash2, Upload } from 'lucide-react';
 import {
   brandLogoUrl,
+  deleteBrandLogoVariant,
   deleteBrandTheme,
   ensureGoogleFonts,
   extractRootVars,
@@ -10,11 +11,13 @@ import {
   getBrand as fetchBrand,
   googleFontsForProposal,
   proposalToCssVars,
+  refineBrandTheme,
   saveBrandTheme,
   setDefaultBrandTheme,
   updateBrand,
   updateBrandThemeFonts,
   uploadBrandLogo,
+  type LogoVariant,
   type TenantBrand,
   type ThemeMeta,
   type ThemeProposal,
@@ -49,7 +52,10 @@ const TENANT_COMPONENT_BY_TAB: Record<PreviewTab, { format: 'a4' | 'slide-16x9';
   'slide-content': { format: 'slide-16x9', name: 'ContentSlide' },
 };
 
-const GENERIC_BY_TAB: Record<PreviewTab, FC<{ brandName: string; logoUrl?: string }>> = {
+const GENERIC_BY_TAB: Record<
+  PreviewTab,
+  FC<{ brandName: string; logoUrl?: string; logos?: { primary?: string; light?: string; mono?: string } }>
+> = {
   'a4-title': A4TitleSample,
   'a4-content': A4ContentSample,
   'slide-title': SlideTitleSample,
@@ -68,6 +74,10 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
   const [feedback, setFeedback] = useState('');
   const [logoVersion, setLogoVersion] = useState(0);
   const [hasLogo, setHasLogo] = useState(Boolean(loadedBrand?.logoUrl));
+  const [logoVariantState, setLogoVariantState] = useState<{ light: boolean; mono: boolean }>({
+    light: false,
+    mono: false,
+  });
   const [proposal, setProposal] = useState<ThemeProposal | null>(null);
   const [variants, setVariants] = useState<ThemeVariant[] | null>(null);
   const [activeVariantIdx, setActiveVariantIdx] = useState<number>(0);
@@ -83,10 +93,13 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
     return loadedBrand?.activeThemeId ?? loadedBrand?.themes[0]?.id ?? null;
   });
   const [generating, setGenerating] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<PreviewTab>('a4-title');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lightLogoInputRef = useRef<HTMLInputElement>(null);
+  const monoLogoInputRef = useRef<HTMLInputElement>(null);
 
   const initialThemesFromLoader = useMemo<BrandThemeInfo[]>(() => loadedBrand?.themes ?? [], [loadedBrand]);
   const selectedThemeCssFromLoader = useMemo(() => {
@@ -110,6 +123,10 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
       setTenantData(t);
       if (!name) setName(t.name);
       setHasLogo(Boolean(t.logo));
+      setLogoVariantState({
+        light: Boolean(t.logoVariants?.light),
+        mono: Boolean(t.logoVariants?.mono),
+      });
       if (!selectedThemeId && t.activeThemeId) setSelectedThemeId(t.activeThemeId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load brand');
@@ -118,16 +135,28 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
 
   useEffect(() => { refreshTenant(); }, [brandId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleUpload = useCallback(async (file: File) => {
+  const handleUpload = useCallback(async (file: File, variant: LogoVariant = 'primary') => {
     setError(null);
     try {
-      await uploadBrandLogo(brandId, file);
-      setHasLogo(true);
+      await uploadBrandLogo(brandId, file, variant);
+      if (variant === 'primary') setHasLogo(true);
+      else setLogoVariantState(s => ({ ...s, [variant]: true }));
       setLogoVersion(v => v + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
-  }, []);
+  }, [brandId]);
+
+  const handleRemoveVariant = useCallback(async (variant: 'light' | 'mono') => {
+    setError(null);
+    try {
+      await deleteBrandLogoVariant(brandId, variant);
+      setLogoVariantState(s => ({ ...s, [variant]: false }));
+      setLogoVersion(v => v + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }, [brandId]);
 
   async function handleGenerate() {
     setError(null);
@@ -153,6 +182,36 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
       setError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleRefine() {
+    if (!proposal) return;
+    const fb = feedback.trim();
+    if (!fb) {
+      setError('Enter feedback to refine the current proposal.');
+      return;
+    }
+    setError(null);
+    setRefining(true);
+    try {
+      const { proposal: next } = await refineBrandTheme(brandId, {
+        previous: proposal,
+        feedback: fb,
+        name: name.trim() || undefined,
+        keywords: keywords.trim() || undefined,
+      });
+      setProposal(next);
+      ensureGoogleFonts(googleFontsForProposal(next));
+      // Replace the variant list with the single refined proposal so the
+      // preview key changes and the variant rail no longer shows the old set.
+      setVariants([{ direction: 'Refined', proposal: next }]);
+      setActiveVariantIdx(0);
+      setFeedback('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Refinement failed');
+    } finally {
+      setRefining(false);
     }
   }
 
@@ -193,6 +252,11 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
   }
 
   const logoUrlForPreview = hasLogo ? brandLogoUrl(brandId, logoVersion) : loadedBrand?.logoUrl;
+  const logoSetForPreview = {
+    primary: logoUrlForPreview,
+    light: logoVariantState.light ? brandLogoUrl(brandId, logoVersion, 'light') : undefined,
+    mono: logoVariantState.mono ? brandLogoUrl(brandId, logoVersion, 'mono') : undefined,
+  };
   const themes = tenantData?.themes ?? initialThemesFromLoader.map(t => ({
     id: t.id, name: t.name, description: t.description, createdAt: t.createdAt,
   }));
@@ -233,7 +297,27 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
               accept="image/*"
               className="hidden"
               onChange={e => {
-                if (e.target.files?.[0]) handleUpload(e.target.files[0]);
+                if (e.target.files?.[0]) handleUpload(e.target.files[0], 'primary');
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={lightLogoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                if (e.target.files?.[0]) handleUpload(e.target.files[0], 'light');
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={monoLogoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                if (e.target.files?.[0]) handleUpload(e.target.files[0], 'mono');
                 e.target.value = '';
               }}
             />
@@ -273,6 +357,26 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
                 </>
               )}
             </button>
+            {hasLogo && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <LogoVariantSlot
+                  label="Light variant"
+                  hint="For dark surfaces"
+                  present={logoVariantState.light}
+                  imgUrl={logoVariantState.light ? brandLogoUrl(brandId, logoVersion, 'light') : undefined}
+                  onUpload={() => lightLogoInputRef.current?.click()}
+                  onRemove={() => handleRemoveVariant('light')}
+                />
+                <LogoVariantSlot
+                  label="Mono variant"
+                  hint="Single-ink, optional"
+                  present={logoVariantState.mono}
+                  imgUrl={logoVariantState.mono ? brandLogoUrl(brandId, logoVersion, 'mono') : undefined}
+                  onUpload={() => monoLogoInputRef.current?.click()}
+                  onRemove={() => handleRemoveVariant('mono')}
+                />
+              </div>
+            )}
           </div>
 
           {/* Brand name */}
@@ -478,20 +582,40 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
             </label>
           )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={generating || !hasLogo}
-            className="lx-focus flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] font-medium transition-colors"
-            style={{
-              background: generating || !hasLogo ? 'var(--lx-surface-hover)' : 'var(--lx-accent)',
-              color: generating || !hasLogo ? 'var(--lx-text-muted)' : 'white',
-              borderRadius: 'var(--lx-radius-md)',
-              cursor: generating || !hasLogo ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <Sparkles className="w-4 h-4" />
-            {generating ? 'Generating…' : proposal ? 'Regenerate' : 'Generate new theme'}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={generating || refining || !hasLogo}
+              className="lx-focus flex items-center justify-center gap-2 px-4 py-2.5 text-[13px] font-medium transition-colors"
+              style={{
+                background: generating || refining || !hasLogo ? 'var(--lx-surface-hover)' : 'var(--lx-accent)',
+                color: generating || refining || !hasLogo ? 'var(--lx-text-muted)' : 'white',
+                borderRadius: 'var(--lx-radius-md)',
+                cursor: generating || refining || !hasLogo ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <Sparkles className="w-4 h-4" />
+              {generating ? 'Generating…' : proposal ? 'Regenerate (fresh)' : 'Generate new theme'}
+            </button>
+
+            {proposal && (
+              <button
+                onClick={handleRefine}
+                disabled={refining || generating || !feedback.trim()}
+                className="lx-focus flex items-center justify-center gap-2 px-4 py-2 text-[12px] font-medium transition-colors"
+                style={{
+                  background: refining || generating || !feedback.trim() ? 'transparent' : 'var(--lx-surface-hover)',
+                  color: refining || generating || !feedback.trim() ? 'var(--lx-text-subtle)' : 'var(--lx-text)',
+                  border: '1px solid var(--lx-border)',
+                  borderRadius: 'var(--lx-radius-md)',
+                  cursor: refining || generating || !feedback.trim() ? 'not-allowed' : 'pointer',
+                }}
+                title={!feedback.trim() ? 'Enter feedback above to refine' : 'Apply feedback as a minimal-delta revision'}
+              >
+                {refining ? 'Refining…' : 'Refine with feedback'}
+              </button>
+            )}
+          </div>
 
           {error && (
             <div
@@ -660,11 +784,12 @@ export function BrandStudio({ brandId = 'kinz', onBack }: BrandStudioProps) {
             ) : null}
             <PreviewCanvas
               key={proposal
-                ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}-${proposal.typography.heading_font}-${proposal.typography.body_font}`
+                ? `p-${activeVariantIdx}-${proposal.structural?.cover_style ?? ''}-${proposal.structural?.accent_stripe ?? ''}-${proposal.structural?.content_grid ?? ''}-${proposal.structural?.title_emphasis ?? ''}-${proposal.logo_treatment?.cover ?? ''}-${proposal.logo_treatment?.content ?? ''}-${proposal.typography.heading_font}-${proposal.typography.body_font}`
                 : `${brandId}-${selectedThemeId ?? 'none'}-${savedFontOverride?.heading ?? ''}-${savedFontOverride?.body ?? ''}`}
               tab={previewTab}
               brandName={name.trim() || tenantData?.name || 'Brand'}
               logoUrl={logoUrlForPreview}
+              logos={logoSetForPreview}
               scale={previewTab.startsWith('a4') ? PREVIEW_SCALE_A4 : PREVIEW_SCALE_SLIDE}
               templates={loadedBrand?.templates ?? {}}
             />
@@ -695,12 +820,14 @@ function PreviewCanvas({
   tab,
   brandName,
   logoUrl,
+  logos,
   scale,
   templates,
 }: {
   tab: PreviewTab;
   brandName: string;
   logoUrl?: string;
+  logos?: { primary?: string; light?: string; mono?: string };
   scale: number;
   templates: LoadedBrand['templates'];
 }) {
@@ -734,7 +861,7 @@ function PreviewCanvas({
           const TenantComponent = tenantComponent as FC;
           return <TenantComponent />;
         })() : (
-          <Generic brandName={brandName} logoUrl={logoUrl} />
+          <Generic brandName={brandName} logoUrl={logoUrl} logos={logos} />
         )}
       </div>
     </div>
@@ -836,6 +963,83 @@ function TypographyPanel({
         <p className="text-[10.5px]" style={{ color: 'var(--lx-text-subtle)' }}>
           Claude picked these. Override anytime — your choice is saved with the theme.
         </p>
+      )}
+    </div>
+  );
+}
+
+function LogoVariantSlot({
+  label,
+  hint,
+  present,
+  imgUrl,
+  onUpload,
+  onRemove,
+}: {
+  label: string;
+  hint: string;
+  present: boolean;
+  imgUrl?: string;
+  onUpload: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col p-2 gap-1.5"
+      style={{
+        background: 'var(--lx-surface)',
+        border: '1px dashed var(--lx-border)',
+        borderRadius: 'var(--lx-radius-sm)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={onUpload}
+        className="flex items-center gap-2 text-left"
+      >
+        {present && imgUrl ? (
+          <img
+            src={imgUrl}
+            alt=""
+            className="w-6 h-6 object-contain flex-shrink-0"
+            style={{
+              background: label === 'Light variant' ? 'var(--color-dark, #1B2332)' : 'white',
+              padding: 2,
+              borderRadius: 'var(--lx-radius-sm)',
+            }}
+          />
+        ) : (
+          <div
+            className="w-6 h-6 flex-shrink-0 flex items-center justify-center"
+            style={{
+              background: 'var(--lx-surface-hover)',
+              borderRadius: 'var(--lx-radius-sm)',
+              color: 'var(--lx-text-subtle)',
+            }}
+          >
+            <Upload className="w-3 h-3" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="text-[10.5px] font-medium truncate" style={{ color: 'var(--lx-text)' }}>
+            {present ? label : `Add ${label.toLowerCase()}`}
+          </div>
+          <div className="text-[9px] truncate" style={{ color: 'var(--lx-text-subtle)' }}>
+            {hint}
+          </div>
+        </div>
+      </button>
+      {present && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="self-end text-[9px] transition-colors"
+          style={{ color: 'var(--lx-text-subtle)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--lx-danger)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--lx-text-subtle)')}
+        >
+          Remove
+        </button>
       )}
     </div>
   );

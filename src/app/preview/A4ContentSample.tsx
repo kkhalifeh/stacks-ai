@@ -1,17 +1,20 @@
 import { useRef } from 'react';
 import { useStructural } from '../useStructural';
 import { AccentStripe } from '../components/brand/AccentStripe';
+import { resolveLogo, type LogoSet } from './logoAsset';
 
 interface Props {
   brandName: string;
   logoUrl?: string;
+  logos?: LogoSet;
 }
 
-export function A4ContentSample({ brandName, logoUrl }: Props) {
+export function A4ContentSample({ brandName, logoUrl, logos }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const { accentStripe, contentGrid } = useStructural(ref);
+  const { accentStripe, contentGrid, logoContentTreatment } = useStructural(ref);
 
   const cols = contentGrid === 'three-column-cards' ? 3 : contentGrid === 'two-column' ? 2 : 1;
+  const logo = resolveLogo(logoContentTreatment, { primary: logoUrl, ...logos });
 
   return (
     <div
@@ -27,7 +30,14 @@ export function A4ContentSample({ brandName, logoUrl }: Props) {
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="w-7 h-7 object-contain opacity-40" />}
+            {logo.src && (
+              <img
+                src={logo.src}
+                alt=""
+                className="w-7 h-7 object-contain opacity-40"
+                style={logo.filter ? { filter: logo.filter } : undefined}
+              />
+            )}
             <h1
               className="text-xl font-bold"
               style={{ color: 'var(--color-text, #1B2332)', fontFamily: 'var(--font-heading, inherit)' }}

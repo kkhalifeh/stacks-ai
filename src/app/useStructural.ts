@@ -3,6 +3,7 @@ import type {
   AccentStripe,
   ContentGrid,
   CoverStyle,
+  LogoTreatment,
   ShapeLanguage,
   TitleEmphasis,
 } from './brand-api';
@@ -13,6 +14,8 @@ export interface StructuralTokens {
   shapeLanguage: ShapeLanguage;
   contentGrid: ContentGrid;
   titleEmphasis: TitleEmphasis;
+  logoCoverTreatment: LogoTreatment;
+  logoContentTreatment: LogoTreatment;
 }
 
 const DEFAULTS: StructuralTokens = {
@@ -21,6 +24,8 @@ const DEFAULTS: StructuralTokens = {
   shapeLanguage: 'rounded',
   contentGrid: 'three-column-cards',
   titleEmphasis: 'large-heading',
+  logoCoverTreatment: 'primary',
+  logoContentTreatment: 'primary',
 };
 
 function readVar(cs: CSSStyleDeclaration, name: string, fallback: string): string {
@@ -47,13 +52,17 @@ export function useStructural(ref: RefObject<HTMLElement | null>): StructuralTok
       shapeLanguage: readVar(cs, '--shape-language', DEFAULTS.shapeLanguage) as ShapeLanguage,
       contentGrid: readVar(cs, '--content-grid', DEFAULTS.contentGrid) as ContentGrid,
       titleEmphasis: readVar(cs, '--title-emphasis', DEFAULTS.titleEmphasis) as TitleEmphasis,
+      logoCoverTreatment: readVar(cs, '--logo-cover-treatment', DEFAULTS.logoCoverTreatment) as LogoTreatment,
+      logoContentTreatment: readVar(cs, '--logo-content-treatment', DEFAULTS.logoContentTreatment) as LogoTreatment,
     };
     setTokens(prev =>
       prev.coverStyle === next.coverStyle &&
       prev.accentStripe === next.accentStripe &&
       prev.shapeLanguage === next.shapeLanguage &&
       prev.contentGrid === next.contentGrid &&
-      prev.titleEmphasis === next.titleEmphasis
+      prev.titleEmphasis === next.titleEmphasis &&
+      prev.logoCoverTreatment === next.logoCoverTreatment &&
+      prev.logoContentTreatment === next.logoContentTreatment
         ? prev
         : next,
     );

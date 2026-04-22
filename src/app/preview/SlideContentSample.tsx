@@ -1,16 +1,19 @@
 import { useRef } from 'react';
 import { useStructural } from '../useStructural';
 import { AccentStripe } from '../components/brand/AccentStripe';
+import { resolveLogo, type LogoSet } from './logoAsset';
 
 interface Props {
   brandName: string;
   logoUrl?: string;
+  logos?: LogoSet;
 }
 
-export function SlideContentSample({ brandName, logoUrl }: Props) {
+export function SlideContentSample({ brandName, logoUrl, logos }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const { accentStripe, contentGrid } = useStructural(ref);
+  const { accentStripe, contentGrid, logoContentTreatment } = useStructural(ref);
   const cols = contentGrid === 'single-column' ? 1 : contentGrid === 'two-column' ? 2 : 3;
+  const logo = resolveLogo(logoContentTreatment, { primary: logoUrl, ...logos });
   const cards = [
     { n: '01', title: 'First pillar', accent: 'var(--color-accent-1, var(--color-primary, #1976D2))' },
     { n: '02', title: 'Second pillar', accent: 'var(--color-primary, #1976D2)' },
@@ -33,7 +36,14 @@ export function SlideContentSample({ brandName, logoUrl }: Props) {
       <div className="flex-1 px-20 pt-10 pb-10 flex flex-col" style={{ color: 'var(--color-text, #1B2332)' }}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="w-7 h-7 object-contain opacity-40" />}
+            {logo.src && (
+              <img
+                src={logo.src}
+                alt=""
+                className="w-7 h-7 object-contain opacity-40"
+                style={logo.filter ? { filter: logo.filter } : undefined}
+              />
+            )}
             <span
               className="text-[10px] px-2 py-1 font-semibold tracking-wide uppercase"
               style={{ background: 'var(--color-primary, #1976D2)', color: 'white', borderRadius: 'var(--radius-sm, 6px)' }}
